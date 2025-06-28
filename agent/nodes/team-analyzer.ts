@@ -1,30 +1,19 @@
-import { AgentInput, AgentOutput, QueryIntent } from '../types';
 import { createLLMService } from '../../services/llm';
+import { createGitHubService, MemberActivity } from '../../services';
 import { ConfigManager } from '../../lib/config.js';
+import { AgentState } from '../state.js';
 
-export const teamAnalyzerNode = async (input: AgentInput): Promise<AgentOutput> => {
-  const { intent, query } = input;
-  
-  if (intent !== QueryIntent.TEAM_SUMMARY) {
-    return {
-      error: 'Team analyzer node requires team_summary intent'
-    };
-  }
-
+export const teamAnalyzerNode = async (state: typeof AgentState.State): Promise<Partial<typeof AgentState.State>> => {
   const llmConfig = ConfigManager.getLLMConfig();
   if (!llmConfig) {
-    return {
-      error: 'LLM configuration not found. Please run "fmt config" to set up OpenAI credentials.'
-    };
+    throw new Error('LLM configuration not found. Please run "fmt config" to set up OpenAI credentials.');
   }
 
   const githubConfig = ConfigManager.getGitHubConfig();
   const jiraConfig = ConfigManager.getJiraConfig();
 
   if (!githubConfig && !jiraConfig) {
-    return {
-      error: 'At least one data source (GitHub or Jira) must be configured for team analysis.'
-    };
+    throw new Error('At least one data source (GitHub or Jira) must be configured for team analysis.');
   }
 
   try {
@@ -36,17 +25,14 @@ export const teamAnalyzerNode = async (input: AgentInput): Promise<AgentOutput> 
       summary
     };
   } catch (error) {
-    return {
-      error: `Failed to analyze team data: ${error}`
-    };
+    throw new Error(`Failed to analyze team data: ${error}`);
   }
 };
 
 const gatherTeamData = async (githubConfig: any, jiraConfig: any) => {
-  const teamData = [];
+  const teamData: MemberActivity[] = [];
   
   if (githubConfig) {
-    const { createGitHubService } = await import('../../services');
     const githubService = createGitHubService(githubConfig);
     
     const twoWeeksAgo = new Date();
@@ -63,7 +49,6 @@ const gatherTeamData = async (githubConfig: any, jiraConfig: any) => {
       const lastActiveDate = calculateLastActiveDate(commits, pullRequests, []);
       
       teamData.push({
-        name: contributorName,
         commits,
         pullRequests,
         issues: [],

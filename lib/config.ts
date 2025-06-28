@@ -1,11 +1,13 @@
 import Conf from 'conf';
 import { GitHubConfig, JiraConfig } from '../services/types.js';
 import { LLMConfig } from '../services/llm.js';
+import { TeamMember } from '../types.js';
 
 interface AppConfig {
   github?: GitHubConfig;
   jira?: JiraConfig;
   llm?: LLMConfig;
+  teamMembers?: TeamMember[];
 }
 
 const config = new Conf({
@@ -50,6 +52,15 @@ export class ConfigManager {
 
   static hasLLMConfig(): boolean {
     return config.has('llm');
+  }
+
+  static setTeamMembers(teamMembers: TeamMember[]): void {
+    config.set('teamMembers', teamMembers);
+  }
+
+  static getTeamMembers(): TeamMember[] | null {
+    const teamMembers = config.get('teamMembers') as TeamMember[] | undefined;
+    return teamMembers || null;
   }
 
   static clearAllConfig(): void {

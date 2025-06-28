@@ -36,7 +36,6 @@ export interface JiraTicket {
 }
 
 export interface MemberActivity {
-  name: string;
   commits: Commit[];
   pullRequests: PullRequest[];
   issues: JiraTicket[];

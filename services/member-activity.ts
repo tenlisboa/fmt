@@ -51,7 +51,6 @@ export class MemberActivityService {
       const lastActive = this.calculateLastActiveDate(commits, pullRequests, assignedIssues);
 
       return {
-        name: memberName,
         commits,
         pullRequests,
         issues: assignedIssues,

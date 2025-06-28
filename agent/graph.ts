@@ -1,9 +1,9 @@
-import { AgentInput, AgentOutput, GraphExecutionResult, QueryIntent } from './types';
-import { queryClassifierNode } from './nodes/query-classifier';
-import { fetchGithubDataNode } from './nodes/fetch-github-data';
-import { fetchJiraDataNode } from './nodes/fetch-jira-data';
-import { mergeDataNode } from './nodes/merge-data';
-import { summarizeDataNode } from './nodes/summarize-data';
+import { GraphExecutionResult } from './types';
+import { supervisorNode } from './nodes/supervisor';
+import { START, StateGraph } from '@langchain/langgraph';
+import { AgentState } from './state';
+import { memberPerformanceNode } from './nodes/member-performance';
+import { HumanMessage } from '@langchain/core/messages';
 import { teamAnalyzerNode } from './nodes/team-analyzer';
 
 export class AgentGraph {
@@ -13,81 +13,40 @@ export class AgentGraph {
     this.executionPath = [];
     
     try {
-      let currentInput: AgentInput = { query };
-      
-      const classifyResult = await this.executeNode('query_classifier', queryClassifierNode, currentInput);
-      if (classifyResult.error) {
-        return this.createErrorResult(classifyResult.error);
-      }
-      
-      currentInput = { ...currentInput, ...classifyResult };
+      const workflow = new StateGraph(AgentState)
+      .addNode('supervisor', supervisorNode)
+      .addNode('member_performance', memberPerformanceNode)
+      .addNode('team_analyzer', teamAnalyzerNode)
 
-      if (currentInput.intent === QueryIntent.TEAM_SUMMARY) {
-        const teamResult = await this.executeNode('team_analyzer', teamAnalyzerNode, currentInput);
-        if (teamResult.error) {
-          return this.createErrorResult(teamResult.error);
-        }
-        
-        return {
-          success: true,
-          result: teamResult,
-          executionPath: this.executionPath
-        };
-      }
-      
-      if (!currentInput.memberName) {
-        return this.createErrorResult('Could not identify member name from query');
-      }
+      workflow.addEdge(START, 'supervisor')
+      .addConditionalEdges(
+        'supervisor',
+        (s: typeof AgentState.State) => s.intent,
+      )
 
-      const [githubResult, jiraResult] = await Promise.all([
-        this.executeNode('fetch_github_data', fetchGithubDataNode, currentInput),
-        {error: null} // TODO: Add Jira data fetching
-      ]);
+      const app = workflow.compile();
+      const result = await app.invoke({
+        messages: [new HumanMessage(query)],
+      });
 
-      currentInput = { ...currentInput, ...githubResult, ...jiraResult };
-
-      if (githubResult.error && jiraResult.error) {
-        return this.createErrorResult('Failed to fetch data from both GitHub and Jira');
-      }
-
-      const mergeResult = await this.executeNode('merge_data', mergeDataNode, currentInput);
-      if (mergeResult.error) {
-        return this.createErrorResult(mergeResult.error);
-      }
-      
-      currentInput = { ...currentInput, ...mergeResult };
-
-      const summaryResult = await this.executeNode('summarize_data', summarizeDataNode, currentInput);
-      if (summaryResult.error) {
-        return this.createErrorResult(summaryResult.error);
+      if (result.error) {
+        throw new Error(result.error);
       }
 
       return {
         success: true,
-        result: summaryResult,
+        result: result,
         executionPath: this.executionPath
       };
     } catch (error) {
-      return this.createErrorResult(`Graph execution failed: ${error}`);
+      return {
+        success: false,
+        error: `Graph execution failed: ${error}`,
+        executionPath: this.executionPath
+      };
     }
   }
 
-  private async executeNode(
-    nodeName: string, 
-    nodeFunction: (input: AgentInput) => Promise<AgentOutput>, 
-    input: AgentInput
-  ): Promise<AgentOutput> {
-    this.executionPath.push(nodeName);
-    return await nodeFunction(input);
-  }
-
-  private createErrorResult(error: string): GraphExecutionResult {
-    return {
-      success: false,
-      error,
-      executionPath: this.executionPath
-    };
-  }
 }
 
 export const createAgentGraph = (): AgentGraph => {
