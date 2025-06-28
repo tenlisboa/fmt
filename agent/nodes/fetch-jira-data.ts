@@ -1,5 +1,6 @@
 import { AgentInput, AgentOutput } from '../types';
 import { createJiraService } from '../../services';
+import { ConfigManager } from '../../lib/config.js';
 
 export const fetchJiraDataNode = async (input: AgentInput): Promise<AgentOutput> => {
   const { memberName } = input;
@@ -10,10 +11,10 @@ export const fetchJiraDataNode = async (input: AgentInput): Promise<AgentOutput>
     };
   }
 
-  const jiraConfig = getJiraConfig();
+  const jiraConfig = ConfigManager.getJiraConfig();
   if (!jiraConfig) {
     return {
-      error: 'Jira configuration not found'
+      error: 'Jira configuration not found. Please run "fmt config" to set up Jira credentials.'
     };
   }
 
@@ -40,17 +41,4 @@ export const fetchJiraDataNode = async (input: AgentInput): Promise<AgentOutput>
       error: `Failed to fetch Jira data: ${error}`
     };
   }
-};
-
-const getJiraConfig = () => {
-  const host = process.env.JIRA_HOST;
-  const username = process.env.JIRA_USERNAME;
-  const password = process.env.JIRA_PASSWORD;
-  const projectKey = process.env.JIRA_PROJECT_KEY;
-
-  if (!host || !username || !password) {
-    return null;
-  }
-
-  return { host, username, password, projectKey };
 }; 

@@ -1,5 +1,6 @@
 import { AgentInput, AgentOutput } from '../types';
 import { createGitHubService } from '../../services';
+import { ConfigManager } from '../../lib/config.js';
 
 export const fetchGithubDataNode = async (input: AgentInput): Promise<AgentOutput> => {
   const { memberName } = input;
@@ -10,10 +11,10 @@ export const fetchGithubDataNode = async (input: AgentInput): Promise<AgentOutpu
     };
   }
 
-  const githubConfig = getGithubConfig();
+  const githubConfig = ConfigManager.getGitHubConfig();
   if (!githubConfig) {
     return {
-      error: 'GitHub configuration not found'
+      error: 'GitHub configuration not found. Please run "fmt config" to set up GitHub credentials.'
     };
   }
 
@@ -40,16 +41,4 @@ export const fetchGithubDataNode = async (input: AgentInput): Promise<AgentOutpu
       error: `Failed to fetch GitHub data: ${error}`
     };
   }
-};
-
-const getGithubConfig = () => {
-  const token = process.env.GITHUB_TOKEN;
-  const owner = process.env.GITHUB_OWNER;
-  const repo = process.env.GITHUB_REPO;
-
-  if (!token || !owner || !repo) {
-    return null;
-  }
-
-  return { token, owner, repo };
 }; 
