@@ -1,9 +1,11 @@
 import Conf from 'conf';
 import { GitHubConfig, JiraConfig } from '../services/types.js';
+import { LLMConfig } from '../services/llm.js';
 
 interface AppConfig {
   github?: GitHubConfig;
   jira?: JiraConfig;
+  llm?: LLMConfig;
 }
 
 const config = new Conf({
@@ -35,6 +37,19 @@ export class ConfigManager {
 
   static hasJiraConfig(): boolean {
     return config.has('jira');
+  }
+
+  static setLLMConfig(llmConfig: LLMConfig): void {
+    config.set('llm', llmConfig);
+  }
+
+  static getLLMConfig(): LLMConfig | null {
+    const llmConfig = config.get('llm') as LLMConfig | undefined;
+    return llmConfig || null;
+  }
+
+  static hasLLMConfig(): boolean {
+    return config.has('llm');
   }
 
   static clearAllConfig(): void {

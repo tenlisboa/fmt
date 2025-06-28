@@ -57,6 +57,11 @@ export interface AgentConfig {
     password: string;
     projectKey?: string;
   };
+  llmConfig: {
+    openaiApiKey: string;
+    model?: string;
+    temperature?: number;
+  };
 }
 
 export interface GraphExecutionResult {

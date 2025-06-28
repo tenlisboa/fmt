@@ -32,6 +32,15 @@ export const builder = (yargs: any) => {
       type: 'string',
       describe: 'Jira project key (optional)'
     })
+    .option('openai-api-key', {
+      type: 'string',
+      describe: 'OpenAI API key for LLM functionality'
+    })
+    .option('openai-model', {
+      type: 'string',
+      describe: 'OpenAI model to use (default: gpt-4o-mini)',
+      default: 'gpt-4o-mini'
+    })
     .option('show', {
       type: 'boolean',
       describe: 'Show current configuration'
@@ -64,6 +73,14 @@ export const handler = (argv: any) => {
       console.log(`    Token: ${'*'.repeat(8)}`);
     } else {
       console.log('  Jira: Not configured');
+    }
+    
+    if (ConfigManager.hasLLMConfig()) {
+      console.log('  OpenAI:');
+      console.log(`    Model: ${config.llm?.model || 'gpt-4o-mini'}`);
+      console.log(`    API Key: ${'*'.repeat(8)}`);
+    } else {
+      console.log('  OpenAI: Not configured');
     }
     
     console.log(`\nConfig file: ${ConfigManager.getConfigPath()}`);
@@ -103,11 +120,22 @@ export const handler = (argv: any) => {
     console.error('❌ Jira configuration requires at least: --jira-host, --jira-username, --jira-password');
   }
 
+  if (argv.openaiApiKey) {
+    ConfigManager.setLLMConfig({
+      openaiApiKey: argv.openaiApiKey,
+      model: argv.openaiModel || 'gpt-4o-mini',
+      temperature: 0.1
+    });
+    console.log('✅ OpenAI configuration saved');
+    updated = true;
+  }
+
   if (!updated && !argv.show && !argv.clear) {
     console.log('🔧 Use --show to view current config or provide configuration options to update');
     console.log('\nExamples:');
     console.log('  fmt config --github-token ghp_xxx --github-owner myorg --github-repo myrepo');
     console.log('  fmt config --jira-host company.atlassian.net --jira-username user@company.com --jira-password xxx');
+    console.log('  fmt config --openai-api-key sk-xxx --openai-model gpt-4o-mini');
     console.log('  fmt config --show');
     console.log('  fmt config --clear');
   }

@@ -1,9 +1,10 @@
-import { AgentInput, AgentOutput, GraphExecutionResult } from './types';
+import { AgentInput, AgentOutput, GraphExecutionResult, QueryIntent } from './types';
 import { queryClassifierNode } from './nodes/query-classifier';
 import { fetchGithubDataNode } from './nodes/fetch-github-data';
 import { fetchJiraDataNode } from './nodes/fetch-jira-data';
 import { mergeDataNode } from './nodes/merge-data';
 import { summarizeDataNode } from './nodes/summarize-data';
+import { teamAnalyzerNode } from './nodes/team-analyzer';
 
 export class AgentGraph {
   private executionPath: string[] = [];
@@ -20,6 +21,19 @@ export class AgentGraph {
       }
       
       currentInput = { ...currentInput, ...classifyResult };
+
+      if (currentInput.intent === QueryIntent.TEAM_SUMMARY) {
+        const teamResult = await this.executeNode('team_analyzer', teamAnalyzerNode, currentInput);
+        if (teamResult.error) {
+          return this.createErrorResult(teamResult.error);
+        }
+        
+        return {
+          success: true,
+          result: teamResult,
+          executionPath: this.executionPath
+        };
+      }
       
       if (!currentInput.memberName) {
         return this.createErrorResult('Could not identify member name from query');
@@ -27,8 +41,7 @@ export class AgentGraph {
 
       const [githubResult, jiraResult] = await Promise.all([
         this.executeNode('fetch_github_data', fetchGithubDataNode, currentInput),
-        // this.executeNode('fetch_jira_data', fetchJiraDataNode, currentInput)
-        {data: [], error: null}
+        {error: null} // TODO: Add Jira data fetching
       ]);
 
       currentInput = { ...currentInput, ...githubResult, ...jiraResult };
