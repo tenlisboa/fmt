@@ -1,0 +1,92 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+You are building an autonomous CLI-based AI agent system for Engineering Leaders. The system integrates with GitHub and Jira APIs to collect team member activity and synthesize operational insights.
+
+- The agent must interpret user intent and perform multi-step workflows using declarative execution graphs.
+- All agent logic is composed as structured graph nodes, never as monolithic functions or single-shot prompts.
+- LangGraph is used to implement deterministic, debuggable flow logic, with a focus on observability and modular composition.
+
+## Development Principles
+
+- All functionality must be implemented through discrete, composable agent steps ("nodes").
+- Follow functional, explicit design. Avoid implicit context where possible.
+- Treat all external data (GitHub, Jira) as unreliable by default. Validate and normalize upstream.
+- Use static typing everywhere via TypeScript interfaces.
+- Code must be maintainable, testable, and debuggable. Favor readability over premature optimization.
+- All CLI commands must be fully type-safe and fail gracefully with helpful error messages.
+- Logging is required for all node executions, with structured output.
+
+## Agent Execution Model
+
+### Data Sources
+
+- GitHub REST API (`@octokit/rest`)
+- Jira REST API (`jira-client`)
+- Team member metadata (loaded from config or flat file)
+
+### Agent Graph Nodes (LangGraph-style)
+
+Each node should be implemented as a pure, single-responsibility function with strong typing:
+
+```ts
+type AgentNode = (input: AgentInput) => Promise<AgentOutput>
+```
+
+#### Data Contracts
+
+Define and use internal types to isolate the agent from raw API formats:
+
+```ts
+interface MemberActivity {
+  name: string
+  commits: Commit[]
+  pullRequests: PullRequest[]
+  issues: JiraTicket[]
+  sprintVelocity: number
+  lastActive: Date
+}
+```
+
+---
+
+## File Structure Requirements
+
+```
+src/
+├── agent/            # LangGraph nodes and flow definition
+│   ├── nodes/
+│   ├── types.ts
+│   └── index.ts
+├── commands/         # yargs CLI commands
+├── config/           # config loader + writer
+├── services/         # GitHub, Jira wrappers
+├── utils/            # logger, helpers
+tests/
+dist/
+```
+
+---
+
+## Code Implementation Rules
+
+* All LangGraph nodes must be:
+  * Async
+  * Explicit in inputs/outputs
+  * Pure functions with no side-effects
+* Use early returns to avoid nested logic.
+* Use clear function names with strong verbs (`fetchJiraIssues`, `classifyQuery`, etc).
+* All config files must be typed and validated on load.
+* Prefer `const` with arrow functions and inline type declarations.
+* Do not write CLI logic in graph nodes or service layers.
+* Agent execution must be traceable via logs. Every node logs its input and output.
+
+---
+
+## Error Handling Rules
+
+* All node functions must fail fast with typed error classes.
+* CLI must print user-friendly error messages and exit with non-zero codes.
+* Do not catch and swallow errors inside graph nodes unless explicitly handled.
