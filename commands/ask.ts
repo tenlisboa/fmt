@@ -1,4 +1,6 @@
 import { Argv } from 'yargs';
+import chalk from 'chalk';
+import { createAgent } from '../agent/index';
 
 export const command = 'ask <question>';
 export const describe = 'Ask the AI agent about a team member or status';
@@ -11,8 +13,18 @@ export const builder = (yargs: Argv) => {
 
 export const handler = async (argv: any) => {
   const { question } = argv;
-  console.log(`🤖 Thinking about: "${question}"`);
-  // TODO: Call agent logic
-  // const response = await agent.query(question);
-  // console.log(response);
+  
+  console.log(chalk.blue(`🤖 Analyzing: "${question}"`));
+  console.log(chalk.gray('Fetching data from GitHub and Jira...'));
+  
+  try {
+    const agent = createAgent();
+    const response = await agent.query(question);
+    
+    console.log('\n' + chalk.green('📊 Analysis Complete:'));
+    console.log(chalk.white(response));
+  } catch (error) {
+    console.error(chalk.red(`❌ Error: ${error}`));
+    process.exit(1);
+  }
 };
