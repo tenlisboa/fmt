@@ -1,0 +1,30 @@
+{
+  "name": "fmt",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.js",
+  "bin": {
+    "fmt": "./dist/bin/index.js"
+  },
+  "scripts": {
+    "start": "tsx bin/index.ts",
+    "build": "tsc",
+    "test": "vitest"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "chalk": "^5.4.1",
+    "dotenv": "^17.0.0",
+    "yargs": "^18.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.7",
+    "@types/yargs": "^17.0.33",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  }
+}

@@ -1,0 +1,21 @@
+{
+    "compilerOptions": {
+      "target": "ES2020",
+      "module": "ESNext",
+      "moduleResolution": "NodeNext",
+      "outDir": "./dist",
+      "rootDir": ".",
+      "strict": true,
+      "esModuleInterop": true,
+      "allowSyntheticDefaultImports": true,
+      "forceConsistentCasingInFileNames": true,
+      "skipLibCheck": true,
+      "declaration": false
+    },
+    "ts-node": {
+      "esm": true
+    },
+    "include": ["bin", "commands", "lib"],
+    "exclude": ["dist", "node_modules", "tests"]
+  }
+  
