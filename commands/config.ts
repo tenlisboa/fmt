@@ -1,6 +1,6 @@
 export const command = 'config';
 export const describe = 'Configure credentials and team settings';
-export const builder = (yargs) => {
+export const builder = (yargs: any) => {
   return yargs
     .option('github-token', {
       type: 'string',
@@ -16,7 +16,7 @@ export const builder = (yargs) => {
     });
 };
 
-export const handler = (argv) => {
+export const handler = (argv: any) => {
   console.log('🔧 Saving config...');
   // TODO: Persist config securely
 };
