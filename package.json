@@ -23,7 +23,7 @@
     "chalk": "^5.4.1",
     "conf": "^14.0.0",
     "dotenv": "^16.4.5",
-    "jira-client": "^8.2.2",
+    "jira.js": "^5.2.1",
     "langchain": "^0.3.7",
     "openai": "^4.70.1",
     "prompts": "^2.4.2",
@@ -31,7 +31,6 @@
   },
   "devDependencies": {
     "@types/conf": "^2.1.0",
-    "@types/jira-client": "^7.1.9",
     "@types/node": "^24.0.7",
     "@types/yargs": "^17.0.33",
     "tsx": "^4.20.3",

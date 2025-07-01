@@ -1,4 +1,3 @@
-
 export interface Commit {
   sha: string;
   message: string;
@@ -13,7 +12,7 @@ export interface PullRequest {
   id: number;
   title: string;
   url: string;
-  state: 'open' | 'closed' | 'merged';
+  state: "open" | "closed" | "merged";
   author: string;
   createdAt: Date;
   mergedAt?: Date;
@@ -39,7 +38,6 @@ export interface MemberActivity {
   commits: Commit[];
   pullRequests: PullRequest[];
   issues: JiraTicket[];
-  sprintVelocity: number;
   lastActive: Date;
 }
 
@@ -59,18 +57,18 @@ export interface JiraConfig {
 export class APIError extends Error {
   constructor(
     message: string,
-    public service: 'github' | 'jira',
+    public service: "github" | "jira",
     public statusCode?: number
   ) {
     super(message);
-    this.name = 'APIError';
+    this.name = "APIError";
   }
 }
 
 export class ValidationError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = 'ValidationError';
+    this.name = "ValidationError";
   }
 }
 
@@ -124,4 +122,4 @@ export interface JiraIssueRaw {
     resolutiondate?: string;
     customfield_10016?: number;
   };
-} 
+}

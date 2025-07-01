@@ -1,6 +1,6 @@
-import { ChatOpenAI } from '@langchain/openai';
-import { HumanMessage, SystemMessage } from '@langchain/core/messages';
-import { BaseChatModel } from '@langchain/core/language_models/chat_models';
+import { ChatOpenAI } from "@langchain/openai";
+import { HumanMessage, SystemMessage } from "@langchain/core/messages";
+import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 
 export interface LLMConfig {
   openaiApiKey: string;
@@ -14,17 +14,23 @@ export class LLMService {
   constructor(config: LLMConfig) {
     this.chatModel = new ChatOpenAI({
       apiKey: config.openaiApiKey,
-      model: config.model || 'gpt-4o-mini', 
+      model: config.model || "gpt-4o-mini",
       temperature: config.temperature || 0.1,
     });
   }
 
-  async classifyQuery(query: string): Promise<{ memberName?: string; githubUsername?: string; email?: string; intent: string }> {
+  async classifyQuery(query: string): Promise<{
+    memberName?: string;
+    githubUsername?: string;
+    jiraUsername?: string;
+    email?: string;
+    intent: string;
+  }> {
     const systemPrompt = `You are an expert at analyzing queries about software engineering team performance.
 
 Your task is to:
 1. Extract any team member names mentioned in the query
-2. Extract the team github usernames mentioned in the query
+2. Extract the team github and jira usernames mentioned in the query
 3. Extract the team member email mentioned in the query
 4. Classify the intent of the query into one of these categories:
    - member_performance: Questions about how a specific team member is doing/performing
@@ -35,27 +41,32 @@ Respond ONLY with a JSON object in this exact format:
 {
   "memberName": "extracted_name_or_null",
   "githubUsername": "extracted_github_username_or_null",
+  "jiraUsername": "extracted_jira_username_or_null",
   "email": "extracted_email_or_null",
   "intent": "one_of_the_four_categories"
 }`;
 
     const messages = [
       new SystemMessage(systemPrompt),
-      new HumanMessage(`Query: "${query}"`)
+      new HumanMessage(`Query: "${query}"`),
     ];
 
     const response = await this.chatModel.invoke(messages);
     const result = JSON.parse(response.content as string);
-    
+
     return {
       memberName: result.memberName || undefined,
       githubUsername: result.githubUsername || undefined,
+      jiraUsername: result.jiraUsername || undefined,
       email: result.email || undefined,
-      intent: result.intent
+      intent: result.intent,
     };
   }
 
-  async summarizeActivity(memberActivity: any, intent?: string): Promise<string> {
+  async summarizeActivity(
+    memberActivity: any,
+    intent?: string
+  ): Promise<string> {
     const systemPrompt = `You are an expert engineering manager AI assistant that provides insightful summaries of team member activity.
 
 Generate a comprehensive but concise summary of the team member's recent activity based on the provided data.
@@ -66,7 +77,7 @@ Guidelines:
 - Highlight both achievements and areas that might need attention
 - Use professional, positive language
 - Keep the summary focused and actionable
-- Consider the query intent: ${intent || 'general performance review'}`;
+- Consider the query intent: ${intent || "general performance review"}`;
 
     const humanPrompt = `Team Member Activity Data:
 ${JSON.stringify(memberActivity, null, 2)}
@@ -75,7 +86,7 @@ Please provide a professional summary of this team member's recent activity and 
 
     const messages = [
       new SystemMessage(systemPrompt),
-      new HumanMessage(humanPrompt)
+      new HumanMessage(humanPrompt),
     ];
 
     const response = await this.chatModel.invoke(messages);
@@ -100,13 +111,13 @@ Guidelines:
     const humanPrompt = `Team Activity Data:
 ${JSON.stringify(teamData, null, 2)}
 
-Query Intent: ${intent || 'team summary'}
+Query Intent: ${intent || "team summary"}
 
 Please provide a comprehensive team analysis based on this data.`;
 
     const messages = [
       new SystemMessage(systemPrompt),
-      new HumanMessage(humanPrompt)
+      new HumanMessage(humanPrompt),
     ];
 
     const response = await this.chatModel.invoke(messages);
@@ -116,4 +127,4 @@ Please provide a comprehensive team analysis based on this data.`;
 
 export const createLLMService = (config: LLMConfig): LLMService => {
   return new LLMService(config);
-}; 
+};
