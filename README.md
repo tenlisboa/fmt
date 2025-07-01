@@ -3,6 +3,7 @@
 FMT is a command-line tool that provides AI-powered analytics for software engineering teams by integrating with GitHub, Jira, and OpenAI to analyze team member performance and provide insights.
 
 ## Table of Contents
+
 - [Installation](#installation)
 - [Configuration](#configuration)
 - [Available Commands](#available-commands)
@@ -14,6 +15,7 @@ FMT is a command-line tool that provides AI-powered analytics for software engin
 ## Installation
 
 ### Prerequisites
+
 - Node.js 18+ (with ES Module support)
 - npm or yarn package manager
 - Access to GitHub repository (with appropriate permissions)
@@ -23,6 +25,7 @@ FMT is a command-line tool that provides AI-powered analytics for software engin
 ### Installation Steps
 
 1. **Clone and install dependencies:**
+
 ```bash
 git clone <repository-url>
 cd fmt
@@ -30,75 +33,95 @@ npm install
 ```
 
 2. **Build the project:**
+
 ```bash
 npm run build
 ```
 
 3. **Install globally (optional):**
+
 ```bash
 npm link
 ```
 
 After installation, you can use the CLI either with:
+
 - `npx tsx bin/index.ts` (development mode)
 - `npm start` (development mode)
 - `fmt` (if installed globally)
 
 ## Configuration
 
-The configuration is managed through the `config` command and stores credentials securely using the `conf` package. Configuration files are stored in your system's standard config directory.
+The configuration is managed through the `config` command with an interactive setup process. Credentials are stored securely using the `conf` package in your system's standard config directory.
 
-### Required Configuration
+### Interactive Configuration Setup
 
-#### 1. GitHub Configuration
+To configure FMT, simply run:
+
 ```bash
-fmt config --github-token ghp_xxxxxxxxxxxx --github-owner myorg --github-repo myrepo
+fmt config
 ```
 
-**Parameters:**
-- `--github-token`: Personal access token with repository read permissions
-- `--github-owner`: GitHub organization or username
-- `--github-repo`: Repository name to analyze
+This will start an interactive setup process that guides you through configuring each service:
+
+1. **Service Selection**: Choose which services you want to configure (GitHub, Jira, OpenAI)
+2. **Step-by-step Prompts**: For each selected service, you'll be prompted for the required information
+3. **Secure Input**: Sensitive information like API keys and passwords are masked during input
+4. **Validation**: Each input is validated to ensure correct format and required fields
+
+### Service Requirements
+
+#### GitHub Configuration
+
+You'll be prompted for:
+
+- **Personal Access Token (PAT)**: GitHub token with repository read permissions
+- **Repository Owner**: GitHub organization or username
+- **Repository Name**: Repository name to analyze
 
 **GitHub Token Permissions Required:**
+
 - Repository access (read)
 - Actions (read) - for workflow data
 - Metadata (read)
 
-#### 2. OpenAI Configuration
-```bash
-fmt config --openai-api-key sk-xxxxxxxxxxxx --openai-model gpt-4o-mini
-```
+#### OpenAI Configuration
 
-**Parameters:**
-- `--openai-api-key`: OpenAI API key
-- `--openai-model`: Model to use (default: gpt-4o-mini)
+You'll be prompted for:
 
-#### 3. Jira Configuration (Optional)
-```bash
-fmt config --jira-host company.atlassian.net --jira-username user@company.com --jira-password xxxxxxxxxxxx --jira-project-key PROJ
-```
+- **API Key**: OpenAI API key for LLM functionality
+- **Model Selection**: Choose from available models:
+  - GPT-4o Mini (Recommended - Fast & Cost-effective)
+  - GPT-4o (Most Capable)
+  - GPT-4 Turbo
+  - GPT-3.5 Turbo (Fastest)
 
-**Parameters:**
-- `--jira-host`: Jira instance hostname
-- `--jira-username`: Jira username or email
-- `--jira-password`: Jira API token (recommended) or password
-- `--jira-project-key`: Project key (optional)
+#### Jira Configuration (Optional)
+
+You'll be prompted for:
+
+- **Host**: Jira instance hostname (e.g., company.atlassian.net)
+- **Username**: Jira username or email
+- **Password/Token**: Jira API token (recommended) or password
+- **Project Key**: Project key (optional, can be left blank)
 
 ### Configuration Management
 
 **View current configuration:**
+
 ```bash
 fmt config --show
 ```
 
 **Clear all configuration:**
+
 ```bash
 fmt config --clear
 ```
 
 **Configuration file location:**
 The config file path is displayed when running `fmt config --show`. Typically located at:
+
 - Linux: `~/.config/fmt/config.json`
 - macOS: `~/Library/Preferences/fmt/config.json`
 - Windows: `%APPDATA%\fmt\config.json`
@@ -106,6 +129,7 @@ The config file path is displayed when running `fmt config --show`. Typically lo
 ## Available Commands
 
 ### 1. `ask` - Query Team Performance
+
 Ask natural language questions about team members or overall team performance.
 
 ```bash
@@ -116,11 +140,13 @@ fmt ask "What is the sprint status?"
 ```
 
 **Supported query types:**
+
 - Individual member performance analysis
 - Team summary and overall performance
 - Sprint status and velocity tracking
 
 ### 2. `config` - Manage Configuration
+
 Configure and manage API credentials and settings.
 
 ```bash
@@ -130,6 +156,7 @@ fmt config [options]                 # Set configuration options
 ```
 
 ### 3. `who` - List Team Members
+
 Display known team members (currently shows static examples).
 
 ```bash
@@ -139,17 +166,21 @@ fmt who
 ## Testing
 
 ### Running Tests
+
 ```bash
 npm test
 ```
 
 The project uses Vitest for testing with the following test structure:
+
 - Unit tests for individual commands
 - Integration tests for services
 - Agent functionality tests
 
 ### Test Coverage
+
 Tests cover:
+
 - Command handlers (`ask`, `config`, `who`)
 - Agent graph execution
 - Service integrations (GitHub, Jira, LLM)
@@ -157,6 +188,7 @@ Tests cover:
 - Error handling scenarios
 
 ### Manual Testing Commands
+
 Based on the command history, here are examples of how the tool has been tested:
 
 ```bash
@@ -173,13 +205,17 @@ npx tsx --inspect bin/index.ts ask "How is Alice doing?"
 ## Debugging
 
 ### Development Mode
+
 Run in development mode with TypeScript compilation:
+
 ```bash
 npm start ask "Your question here"
 ```
 
 ### Debug Mode with Inspector
+
 For advanced debugging with Node.js inspector:
+
 ```bash
 npx tsx --inspect bin/index.ts ask "Your question here"
 ```
@@ -187,15 +223,18 @@ npx tsx --inspect bin/index.ts ask "Your question here"
 ### Common Issues and Solutions
 
 1. **Configuration not found errors:**
+
    - Run `fmt config --show` to verify configuration
    - Ensure all required fields are set for the services you want to use
 
 2. **API connection failures:**
+
    - Verify API tokens have correct permissions
    - Check network connectivity to GitHub/Jira/OpenAI APIs
    - Validate API token expiration
 
 3. **Member not found errors:**
+
    - Ensure GitHub usernames exist in the configured repository
    - Verify Jira usernames match the configured instance
    - Check that members have recent activity in the specified timeframe
@@ -206,7 +245,9 @@ npx tsx --inspect bin/index.ts ask "Your question here"
    - Ensure query is clear and well-formed
 
 ### Logging and Verbosity
+
 The application uses console logging with color-coded output:
+
 - Blue: Analysis status
 - Green: Success messages
 - Red: Error messages
@@ -217,11 +258,13 @@ The application uses console logging with color-coded output:
 ### Team Member Information Gathering
 
 1. **Manual Team Member Configuration:**
+
    - The `who` command currently shows hardcoded examples (Alice, Bob, Charlie)
    - No automatic discovery of team member mappings between GitHub and Jira
    - Team member aliases and email mappings must be managed manually
 
 2. **Username Mapping Challenges:**
+
    - GitHub usernames and Jira usernames often differ
    - No built-in mechanism to automatically link GitHub and Jira accounts
    - Requires manual specification of usernames in queries or configuration
@@ -234,12 +277,14 @@ The application uses console logging with color-coded output:
 ### Data Source Limitations
 
 4. **GitHub Integration Constraints:**
+
    - Limited to single repository analysis per configuration
    - Only analyzes last 14 days of activity by default
    - Requires repository read permissions
    - Cannot access private repository data without proper token permissions
 
 5. **Jira Integration Limitations:**
+
    - Project key configuration affects data scope
    - Sprint velocity calculation may be inaccurate without proper story point configuration
    - Limited to issues visible to the configured user account
@@ -254,11 +299,13 @@ The application uses console logging with color-coded output:
 ### Functional Limitations
 
 7. **Query Processing:**
+
    - Natural language processing depends on LLM accuracy
    - Complex queries may not be properly classified
    - Limited to predefined query intents (member performance, team summary)
 
 8. **Real-time Analysis:**
+
    - No caching mechanism for API responses
    - Each query triggers fresh API calls to all configured services
    - No background data synchronization
@@ -271,6 +318,7 @@ The application uses console logging with color-coded output:
 ### Security and Privacy
 
 10. **Credential Storage:**
+
     - API keys stored in plain text in configuration files
     - No encryption of sensitive configuration data
     - Configuration files accessible to system users
@@ -283,6 +331,7 @@ The application uses console logging with color-coded output:
 ## Development
 
 ### Project Structure
+
 ```
 fmt/
 ├── bin/           # CLI entry point
@@ -295,6 +344,7 @@ fmt/
 ```
 
 ### Technology Stack
+
 - **Runtime:** Node.js with ES Modules
 - **Language:** TypeScript
 - **CLI Framework:** Yargs
@@ -303,11 +353,13 @@ fmt/
 - **APIs:** GitHub REST API, Jira REST API, OpenAI API
 
 ### Adding New Commands
+
 1. Create a new file in `commands/` directory
 2. Export `command`, `describe`, `builder`, and `handler`
 3. Follow the existing pattern from `commands/ask.ts` or `commands/config.ts`
 
 ### Contributing
+
 1. Fork the repository
 2. Create a feature branch
 3. Write tests for new functionality
@@ -316,4 +368,4 @@ fmt/
 
 ---
 
-For additional support or feature requests, please refer to the project's issue tracker or documentation. 
+For additional support or feature requests, please refer to the project's issue tracker or documentation.

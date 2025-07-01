@@ -1,46 +1,10 @@
+import prompts from 'prompts';
 import { ConfigManager } from '../lib/config.js';
 
 export const command = 'config';
 export const describe = 'Configure credentials and team settings';
 export const builder = (yargs: any) => {
   return yargs
-    .option('github-token', {
-      type: 'string',
-      describe: 'GitHub personal access token'
-    })
-    .option('github-owner', {
-      type: 'string',
-      describe: 'GitHub repository owner'
-    })
-    .option('github-repo', {
-      type: 'string',
-      describe: 'GitHub repository name'
-    })
-    .option('jira-host', {
-      type: 'string',
-      describe: 'Jira host (e.g., company.atlassian.net)'
-    })
-    .option('jira-username', {
-      type: 'string',
-      describe: 'Jira username'
-    })
-    .option('jira-password', {
-      type: 'string',
-      describe: 'Jira API token or password'
-    })
-    .option('jira-project-key', {
-      type: 'string',
-      describe: 'Jira project key (optional)'
-    })
-    .option('openai-api-key', {
-      type: 'string',
-      describe: 'OpenAI API key for LLM functionality'
-    })
-    .option('openai-model', {
-      type: 'string',
-      describe: 'OpenAI model to use (default: gpt-4o-mini)',
-      default: 'gpt-4o-mini'
-    })
     .option('show', {
       type: 'boolean',
       describe: 'Show current configuration'
@@ -51,7 +15,131 @@ export const builder = (yargs: any) => {
     });
 };
 
-export const handler = (argv: any) => {
+async function promptGitHubConfig(): Promise<void> {
+  console.log('\n🐙 GitHub Configuration');
+  console.log('You\'ll need a Personal Access Token (PAT) with repository access.');
+  
+  const response = await prompts([
+    {
+      type: 'password',
+      name: 'githubToken',
+      message: 'What is your GitHub Personal Access Token (PAT)?',
+      validate: (value: string) => value.length > 0 || 'GitHub token is required'
+    },
+    {
+      type: 'text',
+      name: 'githubOwner',
+      message: 'What is the GitHub repository owner/organization?',
+      validate: (value: string) => value.length > 0 || 'Repository owner is required'
+    },
+    {
+      type: 'text',
+      name: 'githubRepo',
+      message: 'What is the GitHub repository name?',
+      validate: (value: string) => value.length > 0 || 'Repository name is required'
+    }
+  ]);
+
+  if (!response.githubToken || !response.githubOwner || !response.githubRepo) {
+    console.log('❌ GitHub configuration cancelled');
+    return;
+  }
+
+  ConfigManager.setGitHubConfig({
+    token: response.githubToken,
+    owner: response.githubOwner,
+    repo: response.githubRepo
+  });
+
+  console.log('✅ GitHub configuration saved successfully!');
+}
+
+async function promptJiraConfig(): Promise<void> {
+  console.log('\n🔷 Jira Configuration');
+  console.log('You\'ll need your Jira credentials and host information.');
+  
+  const response = await prompts([
+    {
+      type: 'text',
+      name: 'jiraHost',
+      message: 'What is your Jira host? (e.g., company.atlassian.net)',
+      validate: (value: string) => value.length > 0 || 'Jira host is required'
+    },
+    {
+      type: 'text',
+      name: 'jiraUsername',
+      message: 'What is your Jira username/email?',
+      validate: (value: string) => value.length > 0 || 'Jira username is required'
+    },
+    {
+      type: 'password',
+      name: 'jiraPassword',
+      message: 'What is your Jira API token or password?',
+      validate: (value: string) => value.length > 0 || 'Jira password/token is required'
+    },
+    {
+      type: 'text',
+      name: 'jiraProjectKey',
+      message: 'What is your Jira project key? (optional, press Enter to skip)',
+      initial: ''
+    }
+  ]);
+
+  if (!response.jiraHost || !response.jiraUsername || !response.jiraPassword) {
+    console.log('❌ Jira configuration cancelled');
+    return;
+  }
+
+  ConfigManager.setJiraConfig({
+    host: response.jiraHost,
+    username: response.jiraUsername,
+    password: response.jiraPassword,
+    projectKey: response.jiraProjectKey || undefined
+  });
+
+  console.log('✅ Jira configuration saved successfully!');
+}
+
+async function promptOpenAIConfig(): Promise<void> {
+  console.log('\n🤖 OpenAI Configuration');
+  console.log('You\'ll need an OpenAI API key for LLM functionality.');
+  
+  const response = await prompts([
+    {
+      type: 'password',
+      name: 'openaiApiKey',
+      message: 'What is your OpenAI API key?',
+      validate: (value: string) => value.length > 0 || 'OpenAI API key is required'
+    },
+    {
+      type: 'select',
+      name: 'openaiModel',
+      message: 'Which OpenAI model would you like to use?',
+      choices: [
+        { title: 'GPT-4o Mini (Recommended - Fast & Cost-effective)', value: 'gpt-4o-mini' },
+        { title: 'GPT-4o (Most Capable)', value: 'gpt-4o' },
+        { title: 'GPT-4 Turbo', value: 'gpt-4-turbo' },
+        { title: 'GPT-3.5 Turbo (Fastest)', value: 'gpt-3.5-turbo' }
+      ],
+      initial: 0
+    }
+  ]);
+
+  if (!response.openaiApiKey || !response.openaiModel) {
+    console.log('❌ OpenAI configuration cancelled');
+    return;
+  }
+
+  ConfigManager.setLLMConfig({
+    openaiApiKey: response.openaiApiKey,
+    model: response.openaiModel,
+    temperature: 0.1
+  });
+
+  console.log('✅ OpenAI configuration saved successfully!');
+}
+
+export const handler = async (argv: any) => {
   if (argv.show) {
     console.log('📋 Current configuration:');
     const config = ConfigManager.getAllConfig();
@@ -88,55 +176,61 @@ export const handler = (argv: any) => {
   }
 
   if (argv.clear) {
-    ConfigManager.clearAllConfig();
-    console.log('🗑️  Configuration cleared');
+    const response = await prompts({
+      type: 'confirm',
+      name: 'confirmClear',
+      message: 'Are you sure you want to clear all configuration?',
+      initial: false
+    });
+
+    if (response.confirmClear) {
+      ConfigManager.clearAllConfig();
+      console.log('🗑️  Configuration cleared successfully!');
+    } else {
+      console.log('❌ Configuration clear cancelled');
+    }
     return;
   }
 
-  let updated = false;
+  // Interactive configuration mode
+  console.log('🔧 Welcome to FMT Configuration Setup!');
+  console.log('Let\'s configure your services step by step.\n');
 
-  if (argv.githubToken && argv.githubOwner && argv.githubRepo) {
-    ConfigManager.setGitHubConfig({
-      token: argv.githubToken,
-      owner: argv.githubOwner,
-      repo: argv.githubRepo
-    });
-    console.log('✅ GitHub configuration saved');
-    updated = true;
-  } else if (argv.githubToken || argv.githubOwner || argv.githubRepo) {
-    console.error('❌ GitHub configuration requires all three options: --github-token, --github-owner, --github-repo');
+  const response = await prompts({
+    type: 'multiselect',
+    name: 'services',
+    message: 'Which services would you like to configure?',
+    choices: [
+      { title: 'GitHub (Repository access)', value: 'github' },
+      { title: 'Jira (Issue tracking)', value: 'jira' },
+      { title: 'OpenAI (LLM functionality)', value: 'openai' }
+    ],
+    min: 1
+  });
+
+  if (!response.services || response.services.length === 0) {
+    console.log('❌ No services selected. Configuration cancelled.');
+    return;
   }
 
-  if (argv.jiraHost && argv.jiraUsername && argv.jiraPassword) {
-    ConfigManager.setJiraConfig({
-      host: argv.jiraHost,
-      username: argv.jiraUsername,
-      password: argv.jiraPassword,
-      projectKey: argv.jiraProjectKey
-    });
-    console.log('✅ Jira configuration saved');
-    updated = true;
-  } else if (argv.jiraHost || argv.jiraUsername || argv.jiraPassword) {
-    console.error('❌ Jira configuration requires at least: --jira-host, --jira-username, --jira-password');
+  for (const service of response.services) {
+    try {
+      switch (service) {
+        case 'github':
+          await promptGitHubConfig();
+          break;
+        case 'jira':
+          await promptJiraConfig();
+          break;
+        case 'openai':
+          await promptOpenAIConfig();
+          break;
+      }
+    } catch (error) {
+      console.error(`❌ Error configuring ${service}:`, error);
+    }
   }
 
-  if (argv.openaiApiKey) {
-    ConfigManager.setLLMConfig({
-      openaiApiKey: argv.openaiApiKey,
-      model: argv.openaiModel || 'gpt-4o-mini',
-      temperature: 0.1
-    });
-    console.log('✅ OpenAI configuration saved');
-    updated = true;
-  }
-
-  if (!updated && !argv.show && !argv.clear) {
-    console.log('🔧 Use --show to view current config or provide configuration options to update');
-    console.log('\nExamples:');
-    console.log('  fmt config --github-token ghp_xxx --github-owner myorg --github-repo myrepo');
-    console.log('  fmt config --jira-host company.atlassian.net --jira-username user@company.com --jira-password xxx');
-    console.log('  fmt config --openai-api-key sk-xxx --openai-model gpt-4o-mini');
-    console.log('  fmt config --show');
-    console.log('  fmt config --clear');
-  }
+  console.log('\n🎉 Configuration complete! You can now use FMT with your configured services.');
+  console.log('💡 Tip: Use `fmt config --show` to view your current configuration anytime.');
 };
