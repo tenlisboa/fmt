@@ -170,6 +170,15 @@ export const handler = async (argv: any) => {
     } else {
       console.log('  OpenAI: Not configured');
     }
+
+    const teamMembers = ConfigManager.getTeamMembers();
+    if (teamMembers && teamMembers.length > 0) {
+      console.log('  Team Members:');
+      console.log(`    Count: ${teamMembers.length} member${teamMembers.length === 1 ? '' : 's'}`);
+      console.log(`    Use "fmt setup --show" for details`);
+    } else {
+      console.log('  Team Members: Not configured');
+    }
     
     console.log(`\nConfig file: ${ConfigManager.getConfigPath()}`);
     return;
