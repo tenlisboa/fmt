@@ -1,6 +1,7 @@
 import { ChatOpenAI } from "@langchain/openai";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
+import { TeamMember } from "../types";
 
 export interface LLMConfig {
   openaiApiKey: string;
@@ -19,7 +20,7 @@ export class LLMService {
     });
   }
 
-  async classifyQuery(query: string): Promise<{
+  async classifyQuery(query: string, teamMembers: TeamMember[]): Promise<{
     memberName?: string;
     githubUsername?: string;
     jiraUsername?: string;
@@ -29,10 +30,8 @@ export class LLMService {
     const systemPrompt = `You are an expert at analyzing queries about software engineering team performance.
 
 Your task is to:
-1. Extract any team member names mentioned in the query
-2. Extract the team github and jira usernames mentioned in the query
-3. Extract the team member email mentioned in the query
-4. Classify the intent of the query into one of these categories:
+1. Select the team member informations on the context based on the query
+2. Classify the intent of the query into one of these categories:
    - member_performance: Questions about how a specific team member is doing/performing
    - team_summary: Questions about overall team performance or summary
    - unknown: Cannot determine intent
@@ -43,11 +42,12 @@ Respond ONLY with a JSON object in this exact format:
   "githubUsername": "extracted_github_username_or_null",
   "jiraUsername": "extracted_jira_username_or_null",
   "email": "extracted_email_or_null",
-  "intent": "one_of_the_four_categories"
+  "intent": "one_of_the_three_categories"
 }`;
 
     const messages = [
       new SystemMessage(systemPrompt),
+      new HumanMessage(`Team Members: ${JSON.stringify(teamMembers, null, 2)}`),
       new HumanMessage(`Query: "${query}"`),
     ];
 

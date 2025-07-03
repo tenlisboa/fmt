@@ -17,10 +17,6 @@ export class Agent {
 
     return result.result.summary;
   }
-
-  async queryDetailed(question: string): Promise<GraphExecutionResult> {
-    return await this.graph.execute(question);
-  }
 }
 
 export const createAgent = (): Agent => {

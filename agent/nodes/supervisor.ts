@@ -20,9 +20,14 @@ export const supervisorNode = async (
     );
   }
 
+  const teamMembers = ConfigManager.getTeamMembers();
+  if (!teamMembers || teamMembers.length === 0) {
+    throw new Error("Team members not found. Please run 'fmt setup' to set up team members.");
+  }
+
   try {
     const llmService = createLLMService(llmConfig);
-    const result = await llmService.classifyQuery(lastMessage.content);
+    const result = await llmService.classifyQuery(lastMessage.content, teamMembers);
 
     const intent = mapStringToQueryIntent(result.intent);
 
