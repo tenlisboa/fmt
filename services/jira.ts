@@ -138,6 +138,78 @@ export class JiraService {
       );
     }
   }
+
+  /**
+   * Get project members from Jira
+   */
+  async getProjectMembers(): Promise<
+    Array<{ username: string; displayName: string; email?: string }>
+  > {
+    try {
+      if (!this.config.projectKey) {
+        throw new ValidationError(
+          "Project key is required to get project members"
+        );
+      }
+
+      // Get recent issues to find active assignees
+      const recentIssues = await this.getRecentIssues(
+        new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+      ); // Last 30 days
+
+      // Extract unique assignees
+      const assigneeMap = new Map<
+        string,
+        { displayName: string; email?: string }
+      >();
+
+      for (const issue of recentIssues) {
+        if (issue.assignee && issue.assignee !== "Unassigned") {
+          assigneeMap.set(issue.assignee, {
+            displayName: issue.assignee,
+            email: undefined, // Jira API doesn't provide email in issue data
+          });
+        }
+      }
+
+      // Convert to array format
+      return Array.from(assigneeMap.entries()).map(([username, info]) => ({
+        username,
+        displayName: info.displayName,
+        email: info.email,
+      }));
+    } catch (error) {
+      throw new APIError(
+        `Failed to get project members: ${error}`,
+        "jira",
+        error instanceof Error ? (error as any).statusCode : undefined
+      );
+    }
+  }
+
+  /**
+   * Get recent issues from a specific date
+   */
+  async getRecentIssues(since: Date): Promise<JiraTicket[]> {
+    try {
+      const sinceStr = since.toISOString().split("T")[0];
+      let jql = `updated >= "${sinceStr}"`;
+
+      if (this.config.projectKey) {
+        jql += ` AND project = "${this.config.projectKey}"`;
+      }
+
+      jql += " ORDER BY updated DESC";
+
+      return this.searchWithJQL(jql, 100); // Get more results for discovery
+    } catch (error) {
+      throw new APIError(
+        `Failed to get recent issues: ${error}`,
+        "jira",
+        error instanceof Error ? (error as any).statusCode : undefined
+      );
+    }
+  }
 }
 
 export const createJiraService = (config: JiraConfig): JiraService => {

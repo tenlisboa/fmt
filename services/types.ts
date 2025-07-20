@@ -57,7 +57,7 @@ export interface JiraConfig {
 export class APIError extends Error {
   constructor(
     message: string,
-    public service: "github" | "jira",
+    public service: "github" | "jira" | "discovery",
     public statusCode?: number
   ) {
     super(message);
@@ -122,4 +122,34 @@ export interface JiraIssueRaw {
     resolutiondate?: string;
     customfield_10016?: number;
   };
+}
+
+// Team Discovery Types
+export interface DiscoveredMember {
+  source: "github" | "jira";
+  username: string;
+  displayName?: string;
+  email?: string;
+  lastActive?: Date;
+  activityCount?: number;
+}
+
+export interface MemberMatch {
+  githubMember: DiscoveredMember;
+  jiraMember: DiscoveredMember;
+  confidence: "high" | "medium" | "low";
+  reason: string;
+}
+
+export interface DiscoveryResult {
+  githubMembers: DiscoveredMember[];
+  jiraMembers: DiscoveredMember[];
+  suggestedMatches: MemberMatch[];
+}
+
+export interface DiscoveryOptions {
+  force?: boolean;
+  githubOnly?: boolean;
+  jiraOnly?: boolean;
+  daysBack?: number;
 }
