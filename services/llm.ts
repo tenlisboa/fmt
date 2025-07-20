@@ -20,7 +20,10 @@ export class LLMService {
     });
   }
 
-  async classifyQuery(query: string, teamMembers: TeamMember[]): Promise<{
+  async classifyQuery(
+    query: string,
+    teamMembers: TeamMember[]
+  ): Promise<{
     memberName?: string;
     githubUsername?: string;
     jiraUsername?: string;
@@ -122,6 +125,197 @@ Please provide a comprehensive team analysis based on this data.`;
 
     const response = await this.chatModel.invoke(messages);
     return response.content as string;
+  }
+
+  /**
+   * Match GitHub and Jira users using LLM intelligence
+   */
+  async matchUsers(
+    githubMembers: Array<{
+      username: string;
+      displayName?: string;
+      email?: string;
+      activityCount?: number;
+    }>,
+    jiraMembers: Array<{
+      username: string;
+      displayName?: string;
+      email?: string;
+      activityCount?: number;
+    }>
+  ): Promise<
+    Array<{
+      githubMember: {
+        username: string;
+        displayName?: string;
+        email?: string;
+        activityCount?: number;
+      };
+      jiraMember: {
+        username: string;
+        displayName?: string;
+        email?: string;
+        activityCount?: number;
+      };
+      confidence: "high" | "medium" | "low";
+      reason: string;
+    }>
+  > {
+    if (githubMembers.length === 0 || jiraMembers.length === 0) {
+      return [];
+    }
+
+    const prompt = `You are an expert at matching user accounts across different platforms. Given lists of GitHub and Jira users, identify which accounts likely belong to the same person.
+
+GitHub Users:
+${githubMembers
+  .map(
+    (m, i) =>
+      `${i + 1}. Username: ${m.username}, Display Name: ${
+        m.displayName || "N/A"
+      }, Email: ${m.email || "N/A"}, Activity: ${m.activityCount || 0} commits`
+  )
+  .join("\n")}
+
+Jira Users:
+${jiraMembers
+  .map(
+    (m, i) =>
+      `${i + 1}. Username: ${m.username}, Display Name: ${
+        m.displayName || "N/A"
+      }, Email: ${m.email || "N/A"}, Activity: ${m.activityCount || 0} issues`
+  )
+  .join("\n")}
+
+Analyze each potential match and respond with a JSON array of matches. For each match, provide:
+- githubIndex: The index of the GitHub user (1-based)
+- jiraIndex: The index of the Jira user (1-based)  
+- confidence: "high", "medium", or "low"
+- reason: Brief explanation of why these accounts likely match
+
+Consider:
+- Exact email matches (high confidence)
+- Similar display names or usernames
+- Common naming patterns (first.last, firstlast, etc.)
+- Activity patterns that suggest the same person
+
+Only include matches you're reasonably confident about. If no good matches exist, return an empty array.
+
+Respond with ONLY valid JSON, no other text:`;
+
+    try {
+      const messages = [
+        new SystemMessage(
+          "You are a helpful assistant that matches user accounts across platforms. Always respond with valid JSON only."
+        ),
+        new HumanMessage(prompt),
+      ];
+
+      const response = await this.chatModel.invoke(messages);
+
+      const content = response.content as string;
+      if (!content) {
+        throw new Error("No response from LLM");
+      }
+
+      // Parse the JSON response
+      const matches = JSON.parse(content);
+
+      // Convert indices back to actual member objects
+      return matches.map((match: any) => ({
+        githubMember: githubMembers[match.githubIndex - 1],
+        jiraMember: jiraMembers[match.jiraIndex - 1],
+        confidence: match.confidence as "high" | "medium" | "low",
+        reason: match.reason,
+      }));
+    } catch (error) {
+      console.warn(
+        `LLM matching failed, falling back to string matching: ${error}`
+      );
+      // Fallback to string matching if LLM fails
+      return this.fallbackStringMatching(githubMembers, jiraMembers);
+    }
+  }
+
+  /**
+   * Fallback string matching when LLM is unavailable
+   */
+  private fallbackStringMatching(
+    githubMembers: Array<{
+      username: string;
+      displayName?: string;
+      email?: string;
+    }>,
+    jiraMembers: Array<{
+      username: string;
+      displayName?: string;
+      email?: string;
+    }>
+  ): Array<{
+    githubMember: { username: string; displayName?: string; email?: string };
+    jiraMember: { username: string; displayName?: string; email?: string };
+    confidence: "high" | "medium" | "low";
+    reason: string;
+  }> {
+    const matches = [];
+
+    for (const githubMember of githubMembers) {
+      for (const jiraMember of jiraMembers) {
+        // High confidence: Exact email match
+        if (
+          githubMember.email &&
+          jiraMember.email &&
+          githubMember.email.toLowerCase() === jiraMember.email.toLowerCase()
+        ) {
+          matches.push({
+            githubMember,
+            jiraMember,
+            confidence: "high" as const,
+            reason: "Exact email match",
+          });
+          continue;
+        }
+
+        // Medium confidence: Display name similarity
+        if (githubMember.displayName && jiraMember.displayName) {
+          const similarity = this.calculateSimilarity(
+            githubMember.displayName,
+            jiraMember.displayName
+          );
+          if (similarity >= 0.8) {
+            matches.push({
+              githubMember,
+              jiraMember,
+              confidence: "medium" as const,
+              reason: `Display name similarity: ${(similarity * 100).toFixed(
+                0
+              )}%`,
+            });
+          }
+        }
+      }
+    }
+
+    return matches;
+  }
+
+  /**
+   * Simple similarity calculation for fallback
+   */
+  private calculateSimilarity(str1: string, str2: string): number {
+    const s1 = str1.toLowerCase();
+    const s2 = str2.toLowerCase();
+
+    if (s1 === s2) return 1;
+    if (s1.includes(s2) || s2.includes(s1)) return 0.9;
+
+    // Simple character overlap
+    const chars1 = new Set(s1.split(""));
+    const chars2 = new Set(s2.split(""));
+    const intersection = new Set([...chars1].filter((x) => chars2.has(x)));
+    const union = new Set([...chars1, ...chars2]);
+
+    return intersection.size / union.size;
   }
 }
 
