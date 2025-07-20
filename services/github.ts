@@ -1,6 +1,7 @@
 import { Octokit } from "@octokit/rest";
 import {
   GitHubConfig,
+  RepositoryConfig,
   Commit,
   PullRequest,
   GitHubCommitRaw,
@@ -11,28 +12,30 @@ import {
 
 export class GitHubService {
   private octokit: Octokit;
-  private config: GitHubConfig;
+  private token: string;
+  private repository: RepositoryConfig;
 
-  constructor(config: GitHubConfig) {
-    this.validateConfig(config);
-    this.config = config;
+  constructor(token: string, repository: RepositoryConfig) {
+    this.validateConfig(token, repository);
+    this.token = token;
+    this.repository = repository;
     this.octokit = new Octokit({
-      auth: config.token,
+      auth: token,
     });
   }
 
-  private validateConfig(config: GitHubConfig): void {
-    if (!config.token || typeof config.token !== "string") {
+  private validateConfig(token: string, repository: RepositoryConfig): void {
+    if (!token || typeof token !== "string") {
       throw new ValidationError(
         "GitHub token is required and must be a string"
       );
     }
-    if (!config.owner || typeof config.owner !== "string") {
+    if (!repository.owner || typeof repository.owner !== "string") {
       throw new ValidationError(
         "GitHub owner is required and must be a string"
       );
     }
-    if (!config.repo || typeof config.repo !== "string") {
+    if (!repository.repo || typeof repository.repo !== "string") {
       throw new ValidationError("GitHub repo is required and must be a string");
     }
   }
@@ -44,8 +47,8 @@ export class GitHubService {
   ): Promise<Commit[]> {
     try {
       const params: any = {
-        owner: this.config.owner,
-        repo: this.config.repo,
+        owner: this.repository.owner,
+        repo: this.repository.repo,
         author,
         per_page: 100,
       };
@@ -77,8 +80,8 @@ export class GitHubService {
   ): Promise<PullRequest[]> {
     try {
       const response = await this.octokit.rest.pulls.list({
-        owner: this.config.owner,
-        repo: this.config.repo,
+        owner: this.repository.owner,
+        repo: this.repository.repo,
         state,
         per_page: 100,
       });
@@ -98,12 +101,16 @@ export class GitHubService {
   async getContributors(): Promise<string[]> {
     try {
       const response = await this.octokit.rest.repos.listContributors({
-        owner: this.config.owner,
-        repo: this.config.repo,
+        owner: this.repository.owner,
+        repo: this.repository.repo,
         per_page: 100,
       });
 
-      return response.data.map((contributor) => contributor.login || "unknown");
+      return response.data
+        .filter(
+          (contributor) => contributor.type === "User" && contributor.login
+        )
+        .map((contributor) => contributor.login!);
     } catch (error) {
       throw new APIError(
         `Failed to fetch contributors: ${error}`,
@@ -127,8 +134,8 @@ export class GitHubService {
 
       // Get all commits since the specified date
       const response = await this.octokit.rest.repos.listCommits({
-        owner: this.config.owner,
-        repo: this.config.repo,
+        owner: this.repository.owner,
+        repo: this.repository.repo,
         since: since.toISOString(),
         per_page: 100,
       });
@@ -220,8 +227,8 @@ export class GitHubService {
   async testConnection(): Promise<boolean> {
     try {
       await this.octokit.rest.repos.get({
-        owner: this.config.owner,
-        repo: this.config.repo,
+        owner: this.repository.owner,
+        repo: this.repository.repo,
       });
       return true;
     } catch (error) {
@@ -234,6 +241,9 @@ export class GitHubService {
   }
 }
 
-export const createGitHubService = (config: GitHubConfig): GitHubService => {
-  return new GitHubService(config);
+export const createGitHubService = (
+  token: string,
+  repository: RepositoryConfig
+): GitHubService => {
+  return new GitHubService(token, repository);
 };

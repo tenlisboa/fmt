@@ -10,9 +10,10 @@ import { createLLMService } from "./llm.js";
 import { ConfigManager } from "../lib/config.js";
 
 export class DiscoveryService {
-  private githubService: any;
+  private githubServices: any[];
   private jiraService: any;
   private llmService: any;
+  private githubConfig: any;
 
   constructor() {
     const githubConfig = ConfigManager.getGitHubConfig();
@@ -26,7 +27,12 @@ export class DiscoveryService {
     }
 
     if (githubConfig) {
-      this.githubService = createGitHubService(githubConfig);
+      this.githubConfig = githubConfig;
+      this.githubServices = githubConfig.repositories.map((repository) =>
+        createGitHubService(githubConfig.token, repository)
+      );
+    } else {
+      this.githubServices = [];
     }
 
     if (jiraConfig) {
@@ -51,7 +57,7 @@ export class DiscoveryService {
 
     try {
       // Discover from GitHub
-      if (!jiraOnly && this.githubService) {
+      if (!jiraOnly && this.githubServices.length > 0) {
         console.log("🔍 Discovering team members from GitHub...");
         githubMembers = await this.discoverGitHubMembers(daysBack);
         console.log(`✅ Found ${githubMembers.length} GitHub members`);
@@ -154,7 +160,7 @@ export class DiscoveryService {
   }
 
   /**
-   * Discover members from GitHub repository
+   * Discover members from GitHub repositories
    */
   private async discoverGitHubMembers(
     daysBack: number
@@ -164,14 +170,27 @@ export class DiscoveryService {
     since.setDate(since.getDate() - daysBack);
 
     try {
-      // Get all contributors
-      const contributors = await this.githubService.getContributors();
+      // Get all contributors from all repositories
+      const allContributors = new Set<string>();
+      const allRecentCommits: any[] = [];
 
-      // Get recent commits to gather more details
-      const recentCommits = await this.githubService.fetchCommitsByAuthor(
-        "",
-        since
-      );
+      for (const githubService of this.githubServices) {
+        try {
+          const contributors = await githubService.getContributors();
+          contributors.forEach((contributor: string) =>
+            allContributors.add(contributor)
+          );
+
+          // Get recent commits to gather more details
+          const recentCommits = await githubService.fetchCommitsByAuthor(
+            "",
+            since
+          );
+          allRecentCommits.push(...recentCommits);
+        } catch (error) {
+          console.warn(`Warning: Failed to get data from repository: ${error}`);
+        }
+      }
 
       // Create a map of recent activity by author
       const authorActivity = new Map<
@@ -179,7 +198,7 @@ export class DiscoveryService {
         { lastCommit: Date; commitCount: number }
       >();
 
-      for (const commit of recentCommits) {
+      for (const commit of allRecentCommits) {
         const existing = authorActivity.get(commit.author) || {
           lastCommit: new Date(0),
           commitCount: 0,
@@ -194,7 +213,7 @@ export class DiscoveryService {
       }
 
       // Process each contributor
-      for (const username of contributors) {
+      for (const username of allContributors) {
         const activity = authorActivity.get(username);
 
         members.push({
@@ -347,10 +366,14 @@ export class DiscoveryService {
   async testConnections(): Promise<{ github: boolean; jira: boolean }> {
     const results = { github: false, jira: false };
 
-    if (this.githubService) {
+    if (this.githubServices.length > 0) {
       try {
-        await this.githubService.testConnection();
-        results.github = true;
+        const githubTests = await Promise.allSettled(
+          this.githubServices.map((service) => service.testConnection())
+        );
+        results.github = githubTests.some(
+          (test) => test.status === "fulfilled" && test.value
+        );
       } catch (error) {
         console.warn(`GitHub connection test failed: ${error}`);
       }

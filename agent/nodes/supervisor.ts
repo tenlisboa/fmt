@@ -1,46 +1,114 @@
-import { QueryIntent } from "../types.js";
-import { createLLMService } from "../../services/llm.js";
-import { ConfigManager } from "../../lib/config.js";
-import { AgentState } from "../state.js";
+import { AgentState } from "../state";
+import { createLLMService, LLMService } from "../../services/llm";
+import { ConfigManager } from "../../lib/config";
+import { QueryIntent } from "../types";
 
 export const supervisorNode = async (
   state: typeof AgentState.State
 ): Promise<Partial<typeof AgentState.State>> => {
-  const { messages } = state;
-  const lastMessage = messages[messages.length - 1];
-
-  if (!lastMessage || typeof lastMessage.content !== "string") {
-    throw new Error("Query is required and must be a string");
-  }
-
   const llmConfig = ConfigManager.getLLMConfig();
   if (!llmConfig) {
-    throw new Error(
-      'LLM configuration not found. Please run "fmt config" to set up OpenAI credentials.'
-    );
+    throw new Error("LLM configuration not found");
   }
 
-  const teamMembers = ConfigManager.getTeamMembers();
-  if (!teamMembers || teamMembers.length === 0) {
-    throw new Error("Team members not found. Please run 'fmt setup' to set up team members.");
-  }
+  const llmService = createLLMService(llmConfig);
+  const repositories = ConfigManager.getRepositories();
 
-  try {
-    const llmService = createLLMService(llmConfig);
-    const result = await llmService.classifyQuery(lastMessage.content, teamMembers);
+  // Extract repository information from the question
+  const repositoryInfo = await extractRepositoryFromQuestion(
+    state.messages[state.messages.length - 1].content as string,
+    repositories,
+    llmService
+  );
 
-    const intent = mapStringToQueryIntent(result.intent);
+  // Extract member information and intent
+  const teamMembers = ConfigManager.getTeamMembers() || [];
+  const analysis = await llmService.classifyQuery(
+    state.messages[state.messages.length - 1].content as string,
+    teamMembers
+  );
 
-    return {
-      memberName: result.memberName,
-      memberGithubUsername: result.githubUsername,
-      memberJiraUsername: result.jiraUsername,
-      intent,
-    };
-  } catch (error) {
-    throw new Error(`Failed to classify query: ${error}`);
-  }
+  return {
+    intent: mapStringToQueryIntent(analysis.intent),
+    memberName: analysis.memberName || "",
+    memberGithubUsername: analysis.githubUsername || "",
+    memberJiraUsername: analysis.jiraUsername || "",
+    repositoryName: repositoryInfo.repositoryName || "",
+  };
 };
+
+async function extractRepositoryFromQuestion(
+  question: string,
+  repositories: any[],
+  llmService: LLMService
+): Promise<{ repositoryName?: string; confidence: number }> {
+  if (repositories.length === 0) {
+    return { confidence: 0 };
+  }
+
+  if (repositories.length === 1) {
+    // Only one repository, use it by default
+    const repo = repositories[0];
+    return {
+      repositoryName: repo.name || `${repo.owner}/${repo.repo}`,
+      confidence: 1.0,
+    };
+  }
+
+  const questionLower = question.toLowerCase();
+  for (const repo of repositories) {
+    const repoName = repo.name || `${repo.owner}/${repo.repo}`;
+    const repoNameLower = repoName.toLowerCase();
+
+    // Check if repository name appears in question
+    if (questionLower.includes(repoNameLower)) {
+      return { repositoryName: repoName, confidence: 0.9 };
+    }
+
+    // Check for partial matches (e.g., "API" matches "API Service")
+    if (repo.name && questionLower.includes(repo.name.toLowerCase())) {
+      return { repositoryName: repoName, confidence: 0.8 };
+    }
+  }
+
+  const response = await llmService.extractRepositoryFromQuestion(
+    question,
+    repositories
+  );
+  const extractedRepo = response.trim();
+
+  if (extractedRepo && extractedRepo !== "none") {
+    // Find the repository that matches the extracted name
+    const foundRepo = repositories.find((repo) => {
+      const repoName = repo.name || `${repo.owner}/${repo.repo}`;
+      return (
+        repoName.toLowerCase() === extractedRepo.toLowerCase() ||
+        (repo.name && repo.name.toLowerCase() === extractedRepo.toLowerCase())
+      );
+    });
+
+    if (foundRepo) {
+      return {
+        repositoryName:
+          foundRepo.name || `${foundRepo.owner}/${foundRepo.repo}`,
+        confidence: 0.7,
+      };
+    }
+  }
+
+  // No specific repository found - use default or all repositories
+  const defaultRepo = repositories.find((repo) => repo.isDefault);
+  if (defaultRepo) {
+    return {
+      repositoryName:
+        defaultRepo.name || `${defaultRepo.owner}/${defaultRepo.repo}`,
+      confidence: 0.5,
+    };
+  }
+
+  // No default repository - return empty to indicate all repositories should be used
+  return { confidence: 0.3 };
+}
 
 const mapStringToQueryIntent = (intentString: string): QueryIntent => {
   switch (intentString) {

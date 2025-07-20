@@ -38,25 +38,58 @@ export const teamAnalyzerNode = async (
 const gatherTeamData = async (githubConfig: any, jiraConfig: any) => {
   const teamData: MemberActivity[] = [];
 
-  if (githubConfig) {
-    const githubService = createGitHubService(githubConfig);
-
+  if (githubConfig && githubConfig.repositories.length > 0) {
     const twoWeeksAgo = new Date();
     twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
 
-    const contributors = await githubService.getContributors();
+    // Get contributors from all repositories
+    const allContributors = new Set<string>();
 
-    for (const contributorName of contributors) {
-      const [commits, pullRequests] = await Promise.all([
-        githubService.fetchCommitsByAuthor(contributorName, twoWeeksAgo),
-        githubService.fetchPullRequestsByAuthor(contributorName),
-      ]);
+    for (const repository of githubConfig.repositories) {
+      const githubService = createGitHubService(githubConfig.token, repository);
+      try {
+        const contributors = await githubService.getContributors();
+        contributors.forEach((contributor) => allContributors.add(contributor));
+      } catch (error) {
+        console.warn(
+          `Failed to get contributors from ${repository.owner}/${repository.repo}: ${error}`
+        );
+      }
+    }
 
-      const lastActiveDate = calculateLastActiveDate(commits, pullRequests, []);
+    // Gather data for each contributor across all repositories
+    for (const contributorName of allContributors) {
+      let allCommits: any[] = [];
+      let allPullRequests: any[] = [];
+
+      for (const repository of githubConfig.repositories) {
+        const githubService = createGitHubService(
+          githubConfig.token,
+          repository
+        );
+        try {
+          const [commits, pullRequests] = await Promise.all([
+            githubService.fetchCommitsByAuthor(contributorName, twoWeeksAgo),
+            githubService.fetchPullRequestsByAuthor(contributorName),
+          ]);
+          allCommits.push(...commits);
+          allPullRequests.push(...pullRequests);
+        } catch (error) {
+          console.warn(
+            `Failed to get data for ${contributorName} from ${repository.owner}/${repository.repo}: ${error}`
+          );
+        }
+      }
+
+      const lastActiveDate = calculateLastActiveDate(
+        allCommits,
+        allPullRequests,
+        []
+      );
 
       teamData.push({
-        commits,
-        pullRequests,
+        commits: allCommits,
+        pullRequests: allPullRequests,
         issues: [],
         lastActive: lastActiveDate,
       });

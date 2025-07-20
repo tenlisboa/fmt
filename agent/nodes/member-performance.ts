@@ -27,6 +27,7 @@ export const memberPerformanceNode = async (
       githubUsername: state.memberGithubUsername,
       jiraUsername: state.memberJiraUsername,
       projectKey: jiraConfig.projectKey,
+      repositoryName: state.repositoryName || undefined,
     }
   );
 

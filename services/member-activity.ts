@@ -4,16 +4,19 @@ import {
   MemberActivity,
   GitHubConfig,
   JiraConfig,
+  RepositoryConfig,
   APIError,
   ValidationError,
 } from "./types.js";
 
 export class MemberActivityService {
-  private githubService: GitHubService;
+  private githubServices: GitHubService[];
   private jiraService: JiraService;
 
   constructor(githubConfig: GitHubConfig, jiraConfig: JiraConfig) {
-    this.githubService = new GitHubService(githubConfig);
+    this.githubServices = githubConfig.repositories.map(
+      (repository) => new GitHubService(githubConfig.token, repository)
+    );
     this.jiraService = new JiraService(jiraConfig);
   }
 
@@ -25,6 +28,7 @@ export class MemberActivityService {
       since?: Date;
       until?: Date;
       projectKey?: string;
+      repositoryName?: string; // Optional: specify which repository to use
     } = {}
   ): Promise<MemberActivity> {
     const {
@@ -33,13 +37,39 @@ export class MemberActivityService {
       since,
       until,
       projectKey,
+      repositoryName,
     } = options;
 
     try {
-      const [commits, pullRequests] = await Promise.all([
-        this.githubService.fetchCommitsByAuthor(githubUsername, since, until),
-        this.githubService.fetchPullRequestsByAuthor(githubUsername),
-      ]);
+      // Determine which GitHub services to use
+      let servicesToUse = this.githubServices;
+      if (repositoryName && repositoryName.trim() !== "") {
+        const specificService = this.githubServices.find(
+          (service) => (service as any).repository.name === repositoryName
+        );
+        if (!specificService) {
+          throw new ValidationError(`Repository '${repositoryName}' not found`);
+        }
+        servicesToUse = [specificService];
+      }
+      // If no repositoryName is provided, use all repositories (default behavior)
+
+      // Fetch data from all relevant repositories
+      const allCommits = await Promise.all(
+        servicesToUse.map((service) =>
+          service.fetchCommitsByAuthor(githubUsername, since, until)
+        )
+      );
+
+      const allPullRequests = await Promise.all(
+        servicesToUse.map((service) =>
+          service.fetchPullRequestsByAuthor(githubUsername)
+        )
+      );
+
+      // Combine results from all repositories
+      const commits = allCommits.flat();
+      const pullRequests = allPullRequests.flat();
 
       const assignedIssues = await this.jiraService.fetchIssuesByAssignee(
         jiraUsername,
@@ -153,14 +183,18 @@ export class MemberActivityService {
     github: boolean;
     jira: boolean;
   }> {
-    const [githubTest, jiraTest] = await Promise.allSettled([
-      this.githubService.testConnection(),
+    const githubTests = await Promise.allSettled(
+      this.githubServices.map((service) => service.testConnection())
+    );
+    const jiraTest = await Promise.allSettled([
       this.jiraService.testConnection(),
     ]);
 
     return {
-      github: githubTest.status === "fulfilled" ? githubTest.value : false,
-      jira: jiraTest.status === "fulfilled" ? jiraTest.value : false,
+      github: githubTests.some(
+        (test) => test.status === "fulfilled" && test.value
+      ),
+      jira: jiraTest[0].status === "fulfilled" ? jiraTest[0].value : false,
     };
   }
 

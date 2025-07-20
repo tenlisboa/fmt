@@ -41,10 +41,17 @@ export interface MemberActivity {
   lastActive: Date;
 }
 
-export interface GitHubConfig {
-  token: string;
+export interface RepositoryConfig {
+  name: string;
   owner: string;
   repo: string;
+  description?: string;
+  isDefault?: boolean;
+}
+
+export interface GitHubConfig {
+  token: string;
+  repositories: RepositoryConfig[];
 }
 
 export interface JiraConfig {

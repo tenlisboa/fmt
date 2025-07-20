@@ -317,6 +317,34 @@ Respond with ONLY valid JSON, no other text:`;
 
     return intersection.size / union.size;
   }
+
+  async extractRepositoryFromQuestion(
+    question: string,
+    repositories: any[]
+  ): Promise<string> {
+    const systemPrompt = `
+You are analyzing a question about team performance. The user has the following repositories configured:
+
+${repositories
+  .map(
+    (repo, i) =>
+      `${i + 1}. ${repo.name || `${repo.owner}/${repo.repo}`}${
+        repo.description ? ` - ${repo.description}` : ""
+      }`
+  )
+  .join("\n")}
+
+Question: "${question}"
+
+Does this question specifically mention or refer to any of these repositories? If yes, respond with just the repository name. If no, respond with "none".
+
+Repository:`;
+
+    const messages = [new HumanMessage(systemPrompt)];
+
+    const response = await this.chatModel.invoke(messages);
+    return response.content as string;
+  }
 }
 
 export const createLLMService = (config: LLMConfig): LLMService => {
