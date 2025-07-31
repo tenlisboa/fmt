@@ -36,7 +36,6 @@ export const AgentState = Annotation.Root({
       commits: [],
       pullRequests: [],
       issues: [],
-      sprintVelocity: 0,
       lastActive: new Date(),
     }),
   }),

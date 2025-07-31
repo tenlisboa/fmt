@@ -2,6 +2,7 @@ import { ChatOpenAI } from "@langchain/openai";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { TeamMember } from "../types";
+import { calculateSimilarity } from "../lib/utils";
 
 export interface LLMConfig {
   openaiApiKey: string;
@@ -278,7 +279,7 @@ Respond with ONLY valid JSON, no other text:`;
 
         // Medium confidence: Display name similarity
         if (githubMember.displayName && jiraMember.displayName) {
-          const similarity = this.calculateSimilarity(
+          const similarity = calculateSimilarity(
             githubMember.displayName,
             jiraMember.displayName
           );
@@ -297,25 +298,6 @@ Respond with ONLY valid JSON, no other text:`;
     }
 
     return matches;
-  }
-
-  /**
-   * Simple similarity calculation for fallback
-   */
-  private calculateSimilarity(str1: string, str2: string): number {
-    const s1 = str1.toLowerCase();
-    const s2 = str2.toLowerCase();
-
-    if (s1 === s2) return 1;
-    if (s1.includes(s2) || s2.includes(s1)) return 0.9;
-
-    // Simple character overlap
-    const chars1 = new Set(s1.split(""));
-    const chars2 = new Set(s2.split(""));
-    const intersection = new Set([...chars1].filter((x) => chars2.has(x)));
-    const union = new Set([...chars1, ...chars2]);
-
-    return intersection.size / union.size;
   }
 
   async extractRepositoryFromQuestion(

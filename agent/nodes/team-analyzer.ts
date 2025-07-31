@@ -1,30 +1,14 @@
-import { createLLMService } from "../../services/llm";
 import { createGitHubService, MemberActivity } from "../../services";
-import { ConfigManager } from "../../lib/config.js";
+import { validateAndCreateServices } from "../../lib/utils.js";
 import { AgentState } from "../state.js";
 
 export const teamAnalyzerNode = async (
   state: typeof AgentState.State
 ): Promise<Partial<typeof AgentState.State>> => {
-  const llmConfig = ConfigManager.getLLMConfig();
-  if (!llmConfig) {
-    throw new Error(
-      'LLM configuration not found. Please run "fmt config" to set up OpenAI credentials.'
-    );
-  }
-
-  const githubConfig = ConfigManager.getGitHubConfig();
-  const jiraConfig = ConfigManager.getJiraConfig();
-
-  if (!githubConfig && !jiraConfig) {
-    throw new Error(
-      "At least one data source (GitHub or Jira) must be configured for team analysis."
-    );
-  }
+  const { llmService, githubConfig, jiraConfig } = validateAndCreateServices();
 
   try {
     const teamData = await gatherTeamData(githubConfig, jiraConfig);
-    const llmService = createLLMService(llmConfig);
     const summary = await llmService.analyzeTeamData(teamData, "team_summary");
 
     return {

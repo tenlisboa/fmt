@@ -7,11 +7,7 @@ import { HumanMessage } from "@langchain/core/messages";
 import { teamAnalyzerNode } from "./nodes/team-analyzer";
 
 export class AgentGraph {
-  private executionPath: string[] = [];
-
   async execute(query: string): Promise<GraphExecutionResult> {
-    this.executionPath = [];
-
     try {
       const workflow = new StateGraph(AgentState)
         .addNode("supervisor", supervisorNode)
@@ -37,18 +33,12 @@ export class AgentGraph {
       return {
         success: true,
         result: result,
-        executionPath: this.executionPath,
       };
     } catch (error) {
       return {
         success: false,
         error: `Graph execution failed: ${error}`,
-        executionPath: this.executionPath,
       };
     }
   }
 }
-
-export const createAgentGraph = (): AgentGraph => {
-  return new AgentGraph();
-};

@@ -1,8 +1,7 @@
-import { createAgentGraph } from "./graph";
-import { GraphExecutionResult } from "./types";
+import { AgentGraph } from "./graph";
 
 export class Agent {
-  private graph = createAgentGraph();
+  private readonly graph = new AgentGraph();
 
   async query(question: string): Promise<string> {
     const result = await this.graph.execute(question);
@@ -18,7 +17,3 @@ export class Agent {
     return result.result.summary;
   }
 }
-
-export const createAgent = (): Agent => {
-  return new Agent();
-};

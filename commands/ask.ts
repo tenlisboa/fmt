@@ -1,6 +1,6 @@
 import { Argv } from "yargs";
 import chalk from "chalk";
-import { createAgent } from "../agent";
+import { Agent } from "../agent";
 import { ConfigManager } from "../lib/config.js";
 
 export const command = "ask <question>";
@@ -53,7 +53,7 @@ export const handler = async (argv: any) => {
   console.log(chalk.gray("Fetching data from GitHub and Jira..."));
 
   try {
-    const agent = createAgent();
+    const agent = new Agent();
     const response = await agent.query(question);
 
     console.log("\n" + chalk.green("📊 Analysis Complete:"));
