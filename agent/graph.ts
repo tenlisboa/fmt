@@ -1,4 +1,4 @@
-import { GraphExecutionResult } from "./types";
+import { GraphExecutionResult, QueryIntent } from "./types";
 import { supervisorNode } from "./nodes/supervisor";
 import { START, StateGraph } from "@langchain/langgraph";
 import { AgentState } from "./state";
@@ -15,8 +15,8 @@ export class AgentGraph {
     try {
       const workflow = new StateGraph(AgentState)
         .addNode("supervisor", supervisorNode)
-        .addNode("member_performance", memberPerformanceNode)
-        .addNode("team_analyzer", teamAnalyzerNode);
+        .addNode(QueryIntent.MEMBER_PERFORMANCE, memberPerformanceNode)
+        .addNode(QueryIntent.TEAM_SUMMARY, teamAnalyzerNode);
 
       workflow
         .addEdge(START, "supervisor")
