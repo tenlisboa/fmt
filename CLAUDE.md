@@ -9,6 +9,8 @@ FMT CLI is a Go-based command-line tool for analyzing team and individual perfor
 ## Code Style
 
 - Do not comment
+- Always search for obsolete code to delete
+- Always keep functions small
 
 ## Build and Development Commands
 
