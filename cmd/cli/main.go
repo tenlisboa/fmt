@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/hashicorp/cli"
+	_ "github.com/joho/godotenv/autoload"
 	"github.com/tenlisboa/fmt/internal/commands"
 )
 
@@ -19,6 +20,9 @@ func main() {
 	c.Commands = map[string]cli.CommandFactory{
 		"init": func() (cli.Command, error) {
 			return &commands.InitCommand{}, nil
+		},
+		"sync": func() (cli.Command, error) {
+			return &commands.SyncCommand{}, nil
 		},
 	}
 
