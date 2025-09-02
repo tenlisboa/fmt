@@ -5,27 +5,23 @@ import (
 	"os"
 
 	"github.com/spf13/viper"
+	"gopkg.in/yaml.v3"
 )
 
 const ConfigFileName = "config.yaml"
 
 func LoadConfig() (*Config, error) {
-	viper.SetConfigName("config")
-	viper.SetConfigType("yaml")
-	viper.AddConfigPath(".")
+	if !ConfigExists() {
+		return &Config{}, nil
+	}
 
-	viper.SetEnvPrefix("FMT")
-	viper.AutomaticEnv()
-
-	if err := viper.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			return &Config{}, nil
-		}
+	data, err := os.ReadFile(ConfigFileName)
+	if err != nil {
 		return nil, fmt.Errorf("error reading config file: %w", err)
 	}
 
 	var config Config
-	if err := viper.Unmarshal(&config); err != nil {
+	if err := yaml.Unmarshal(data, &config); err != nil {
 		return nil, fmt.Errorf("error unmarshaling config: %w", err)
 	}
 
