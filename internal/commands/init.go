@@ -29,7 +29,7 @@ func (c *InitCommand) Synopsis() string {
 
 func (c *InitCommand) Run(args []string) int {
 	if config.ConfigExists() {
-		fmt.Println("Configuration file already exists. Use 'fmt configure' to modify existing configuration.")
+		fmt.Println(fmt.Printf("Configuration file already exists. edit the %s", config.ConfigFileName()))
 		return 1
 	}
 
@@ -53,7 +53,7 @@ func (c *InitCommand) Run(args []string) int {
 		return 1
 	}
 
-	fmt.Printf("\n✅ Configuration saved to %s\n", config.ConfigFileName)
+	fmt.Printf("\n✅ Configuration saved to %s\n", config.ConfigFileName())
 	fmt.Println("You can now run 'fmt sync' to start collecting data.")
 
 	return 0

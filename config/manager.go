@@ -8,14 +8,14 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const ConfigFileName = "config.yaml"
+const configFileName = "config.yaml"
 
 func LoadConfig() (*Config, error) {
 	if !ConfigExists() {
 		return &Config{}, nil
 	}
 
-	data, err := os.ReadFile(ConfigFileName)
+	data, err := os.ReadFile(configFileName)
 	if err != nil {
 		return nil, fmt.Errorf("error reading config file: %w", err)
 	}
@@ -32,7 +32,7 @@ func SaveConfig(config *Config) error {
 	viper.Set("integrations", config.Integrations)
 	viper.Set("teams", config.Teams)
 
-	if err := viper.WriteConfigAs(ConfigFileName); err != nil {
+	if err := viper.WriteConfigAs(configFileName); err != nil {
 		return fmt.Errorf("error writing config file: %w", err)
 	}
 
@@ -40,8 +40,12 @@ func SaveConfig(config *Config) error {
 }
 
 func ConfigExists() bool {
-	_, err := os.Stat(ConfigFileName)
+	_, err := os.Stat(configFileName)
 	return err == nil
+}
+
+func ConfigFileName() string {
+	return configFileName
 }
 
 func SetupDefaults() {
