@@ -11,6 +11,7 @@ import (
 	"github.com/tenlisboa/fmt/config"
 	"github.com/tenlisboa/fmt/internal/datastore"
 	"github.com/tenlisboa/fmt/internal/integrations/github"
+	"github.com/tenlisboa/fmt/internal/integrations/jira"
 )
 
 type SyncCommand struct{}
@@ -27,6 +28,8 @@ Options:
 
 Environment Variables:
   GITHUB_TOKEN     GitHub personal access token (required)
+  JIRA_API_TOKEN   Jira API token (required)
+  JIRA_USERNAME    Jira username (required)
 
 Examples:
   fmt sync                           # Sync all teams and repositories
@@ -65,6 +68,13 @@ func (c *SyncCommand) Run(args []string) int {
 		return 1
 	}
 
+	jiraAPIToken := os.Getenv("JIRA_API_TOKEN")
+	jiraUsername := os.Getenv("JIRA_USERNAME")
+	if jiraAPIToken == "" || jiraUsername == "" {
+		fmt.Println("JIRA_API_TOKEN and JIRA_USERNAME environment variables are required")
+		return 1
+	}
+
 	var since *time.Time
 	if *sinceFlag != "" {
 		parsedTime, err := time.Parse("2006-01-02", *sinceFlag)
@@ -79,7 +89,7 @@ func (c *SyncCommand) Run(args []string) int {
 		return c.runDryRun(cfg, *teamFlag, since)
 	}
 
-	return c.runSync(cfg, githubToken, *teamFlag, since)
+	return c.runSync(cfg, githubToken, jiraAPIToken, jiraUsername, *teamFlag, since)
 }
 
 func (c *SyncCommand) runDryRun(cfg *config.Config, teamFilter string, since *time.Time) int {
@@ -93,6 +103,8 @@ func (c *SyncCommand) runDryRun(cfg *config.Config, teamFilter string, since *ti
 
 	fmt.Printf("GitHub Organization: %s\n", cfg.Integrations.GitHub.Organization)
 	fmt.Printf("Repositories: %s\n", strings.Join(cfg.Integrations.GitHub.Repositories, ", "))
+	fmt.Printf("Jira URL: %s\n", cfg.Integrations.Jira.URL)
+	fmt.Printf("Jira Projects: %s\n", strings.Join(cfg.Integrations.Jira.Projects, ", "))
 
 	if since != nil {
 		fmt.Printf("Since: %s\n", since.Format("2006-01-02"))
@@ -102,10 +114,17 @@ func (c *SyncCommand) runDryRun(cfg *config.Config, teamFilter string, since *ti
 	for _, team := range teamsToSync {
 		fmt.Printf("  Team: %s\n", team.Name)
 		for _, member := range team.Members {
-			if member.GitHubUsername != "" {
-				fmt.Printf("    - %s (@%s)\n", member.Name, member.GitHubUsername)
+			ghUser := member.GitHubUsername
+			jiraUser := member.JiraUsername
+
+			if ghUser != "" && jiraUser != "" {
+				fmt.Printf("    - %s (@%s, jira: %s)\n", member.Name, ghUser, jiraUser)
+			} else if ghUser != "" {
+				fmt.Printf("    - %s (@%s, no Jira username)\n", member.Name, ghUser)
+			} else if jiraUser != "" {
+				fmt.Printf("    - %s (jira: %s, no GitHub username)\n", member.Name, jiraUser)
 			} else {
-				fmt.Printf("    - %s (no GitHub username configured)\n", member.Name)
+				fmt.Printf("    - %s (no GitHub or Jira username configured)\n", member.Name)
 			}
 		}
 	}
@@ -113,7 +132,7 @@ func (c *SyncCommand) runDryRun(cfg *config.Config, teamFilter string, since *ti
 	return 0
 }
 
-func (c *SyncCommand) runSync(cfg *config.Config, githubToken, teamFilter string, since *time.Time) int {
+func (c *SyncCommand) runSync(cfg *config.Config, githubToken, jiraAPIToken, jiraUsername, teamFilter string, since *time.Time) int {
 	fmt.Println("Starting sync...")
 
 	db, err := datastore.NewDB()
@@ -124,7 +143,9 @@ func (c *SyncCommand) runSync(cfg *config.Config, githubToken, teamFilter string
 	defer db.Close()
 
 	prRepo := datastore.NewPRRepository(db)
+	issueRepo := datastore.NewIssueRepository(db)
 	ghClient := github.NewClient(githubToken, cfg.Integrations.GitHub.Organization)
+	jiraClient := jira.NewClient(cfg.Integrations.Jira.URL, jiraUsername, jiraAPIToken)
 
 	teamsToSync := c.filterTeams(cfg.Teams, teamFilter)
 	if len(teamsToSync) == 0 {
@@ -134,6 +155,7 @@ func (c *SyncCommand) runSync(cfg *config.Config, githubToken, teamFilter string
 
 	ctx := context.Background()
 	totalPRs := 0
+	totalIssues := 0
 
 	for _, repo := range cfg.Integrations.GitHub.Repositories {
 		fmt.Printf("\n=== Syncing repository: %s ===\n", repo)
@@ -184,7 +206,56 @@ func (c *SyncCommand) runSync(cfg *config.Config, githubToken, teamFilter string
 		}
 	}
 
-	fmt.Printf("\n✅ Sync completed! Processed %d PRs total.\n", totalPRs)
+	for _, project := range cfg.Integrations.Jira.Projects {
+		fmt.Printf("\n=== Syncing Jira project: %s ===\n", project)
+
+		if err := jiraClient.ValidateAccess(ctx, project); err != nil {
+			fmt.Printf("Warning: Cannot access project %s: %v\n", project, err)
+			continue
+		}
+
+		lastSync, err := issueRepo.GetLastSync(project)
+		if err != nil {
+			fmt.Printf("Warning: Could not get last sync time for %s: %v\n", project, err)
+		}
+
+		syncSince := since
+		if syncSince == nil && lastSync != nil {
+			syncSince = lastSync
+		}
+
+		for _, team := range teamsToSync {
+			fmt.Printf("  Team: %s\n", team.Name)
+
+			usernames := c.extractJiraUsernames(team.Members)
+			if len(usernames) == 0 {
+				fmt.Printf("    No Jira usernames configured for this team\n")
+				continue
+			}
+
+			issues, err := jiraClient.FetchIssuesForTeamMembers(ctx, project, usernames, syncSince)
+			if err != nil {
+				fmt.Printf("    Error fetching issues: %v\n", err)
+				continue
+			}
+
+			fmt.Printf("    Found %d issues\n", len(issues))
+
+			for _, issue := range issues {
+				if err := issueRepo.Save(issue); err != nil {
+					fmt.Printf("    Warning: Failed to save issue %s: %v\n", issue.JiraIssueID, err)
+				} else {
+					totalIssues++
+				}
+			}
+		}
+
+		if err := issueRepo.UpdateLastSync(project); err != nil {
+			fmt.Printf("Warning: Failed to update last sync time for %s: %v\n", project, err)
+		}
+	}
+
+	fmt.Printf("\n✅ Sync completed! Processed %d PRs and %d issues total.\n", totalPRs, totalIssues)
 	return 0
 }
 
@@ -208,6 +279,16 @@ func (c *SyncCommand) extractGitHubUsernames(members []config.Member) []string {
 	for _, member := range members {
 		if member.GitHubUsername != "" {
 			usernames = append(usernames, member.GitHubUsername)
+		}
+	}
+	return usernames
+}
+
+func (c *SyncCommand) extractJiraUsernames(members []config.Member) []string {
+	var usernames []string
+	for _, member := range members {
+		if member.JiraUsername != "" {
+			usernames = append(usernames, member.JiraUsername)
 		}
 	}
 	return usernames

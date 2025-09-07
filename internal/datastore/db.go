@@ -27,12 +27,40 @@ const (
 			UNIQUE(github_pr_id, repository)
 		);`
 
+	createIssuesTable = `
+		CREATE TABLE IF NOT EXISTS issues (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			jira_issue_id TEXT NOT NULL,
+			title TEXT NOT NULL,
+			description TEXT,
+			status TEXT NOT NULL,
+			priority TEXT,
+			assignee TEXT,
+			reporter TEXT,
+			project TEXT NOT NULL,
+			issue_type TEXT,
+			labels TEXT,
+			story_points INTEGER,
+			created_at DATETIME NOT NULL,
+			updated_at DATETIME NOT NULL,
+			resolved_at DATETIME,
+			UNIQUE(jira_issue_id, project)
+		);`
+
 	createSyncRunsTable = `
 		CREATE TABLE IF NOT EXISTS sync_runs (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			repository TEXT NOT NULL,
 			last_sync_at DATETIME NOT NULL,
 			UNIQUE(repository)
+		);`
+
+	createJiraSyncRunsTable = `
+		CREATE TABLE IF NOT EXISTS jira_sync_runs (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			project TEXT NOT NULL,
+			last_sync_at DATETIME NOT NULL,
+			UNIQUE(project)
 		);`
 )
 
@@ -59,8 +87,16 @@ func (db *DB) migrate() error {
 		return fmt.Errorf("failed to create pull_requests table: %w", err)
 	}
 
+	if _, err := db.conn.Exec(createIssuesTable); err != nil {
+		return fmt.Errorf("failed to create issues table: %w", err)
+	}
+
 	if _, err := db.conn.Exec(createSyncRunsTable); err != nil {
 		return fmt.Errorf("failed to create sync_runs table: %w", err)
+	}
+
+	if _, err := db.conn.Exec(createJiraSyncRunsTable); err != nil {
+		return fmt.Errorf("failed to create jira_sync_runs table: %w", err)
 	}
 
 	return nil

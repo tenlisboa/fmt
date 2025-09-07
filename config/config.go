@@ -11,7 +11,8 @@ type Integrations struct {
 }
 
 type JiraConfig struct {
-	URL string `yaml:"url" json:"url"`
+	URL      string   `yaml:"url" json:"url"`
+	Projects []string `yaml:"projects" json:"projects"`
 }
 
 type GitHubConfig struct {

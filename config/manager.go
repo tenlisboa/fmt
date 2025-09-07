@@ -50,6 +50,7 @@ func ConfigFileName() string {
 
 func SetupDefaults() {
 	viper.SetDefault("integrations.jira.url", "")
+	viper.SetDefault("integrations.jira.projects", []string{})
 	viper.SetDefault("integrations.github.organization", "")
 	viper.SetDefault("integrations.github.repositories", []string{})
 	viper.SetDefault("teams", []Team{})
