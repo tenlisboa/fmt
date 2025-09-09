@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/go-github/v66/github"
+	"github.com/google/go-github/v74/github"
 	"github.com/tenlisboa/fmt/internal/core"
 	"golang.org/x/oauth2"
 )
