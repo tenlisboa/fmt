@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -46,7 +47,6 @@ func (c *SyncCommand) Run(args []string) int {
 	var (
 		sinceFlag = flag.String("since", "", "Sync PRs created since this date (format: 2006-01-02)")
 		teamFlag  = flag.String("team", "", "Sync data for specific team only")
-		dryRun    = flag.Bool("dry-run", false, "Show what would be synced without actually doing it")
 	)
 
 	flag.CommandLine.Parse(args)
@@ -85,51 +85,29 @@ func (c *SyncCommand) Run(args []string) int {
 		since = &parsedTime
 	}
 
-	if *dryRun {
-		return c.runDryRun(cfg, *teamFlag, since)
-	}
-
 	return c.runSync(cfg, githubToken, jiraAPIToken, jiraUsername, *teamFlag, since)
 }
 
-func (c *SyncCommand) runDryRun(cfg *config.Config, teamFilter string, since *time.Time) int {
-	fmt.Println("=== Dry Run - What would be synced ===")
+type workerPool chan struct{}
 
-	teamsToSync := c.filterTeams(cfg.Teams, teamFilter)
-	if len(teamsToSync) == 0 {
-		fmt.Printf("No teams found matching filter: %s\n", teamFilter)
-		return 1
+var wp workerPool
+
+func NewWorkerPool(size int) workerPool {
+	return make(chan struct{}, size)
+}
+
+func (w workerPool) Work(fn func()) {
+	select {
+	case w <- struct{}{}:
+		go func() {
+			defer func() { <-w }()
+			fn()
+		}()
 	}
+}
 
-	fmt.Printf("GitHub Organization: %s\n", cfg.Integrations.GitHub.Organization)
-	fmt.Printf("Repositories: %s\n", strings.Join(cfg.Integrations.GitHub.Repositories, ", "))
-	fmt.Printf("Jira URL: %s\n", cfg.Integrations.Jira.URL)
-	fmt.Printf("Jira Projects: %s\n", strings.Join(cfg.Integrations.Jira.Projects, ", "))
-
-	if since != nil {
-		fmt.Printf("Since: %s\n", since.Format("2006-01-02"))
-	}
-
-	fmt.Println("\nTeams and members to sync:")
-	for _, team := range teamsToSync {
-		fmt.Printf("  Team: %s\n", team.Name)
-		for _, member := range team.Members {
-			ghUser := member.GitHubUsername
-			jiraUser := member.JiraUsername
-
-			if ghUser != "" && jiraUser != "" {
-				fmt.Printf("    - %s (@%s, jira: %s)\n", member.Name, ghUser, jiraUser)
-			} else if ghUser != "" {
-				fmt.Printf("    - %s (@%s, no Jira username)\n", member.Name, ghUser)
-			} else if jiraUser != "" {
-				fmt.Printf("    - %s (jira: %s, no GitHub username)\n", member.Name, jiraUser)
-			} else {
-				fmt.Printf("    - %s (no GitHub or Jira username configured)\n", member.Name)
-			}
-		}
-	}
-
-	return 0
+func init() {
+	wp = NewWorkerPool(runtime.NumCPU())
 }
 
 func (c *SyncCommand) runSync(cfg *config.Config, githubToken, jiraAPIToken, jiraUsername, teamFilter string, since *time.Time) int {
@@ -157,52 +135,56 @@ func (c *SyncCommand) runSync(cfg *config.Config, githubToken, jiraAPIToken, jir
 	totalPRs := 0
 	totalIssues := 0
 
-	for _, repo := range cfg.Integrations.GitHub.Repositories {
-		fmt.Printf("\n=== Syncing repository: %s ===\n", repo)
+	for _, team := range teamsToSync {
+		fmt.Printf("\n=== Syncing team: %s ===\n", team.Name)
 
-		if err := ghClient.ValidateAccess(ctx, repo); err != nil {
-			fmt.Printf("Warning: Cannot access repository %s: %v\n", repo, err)
+		usernames := c.extractGitHubUsernames(team.Members)
+		if len(usernames) == 0 {
+			fmt.Printf("  No GitHub usernames configured for this team\n")
 			continue
 		}
 
-		lastSync, err := prRepo.GetLastSync(repo)
-		if err != nil {
-			fmt.Printf("Warning: Could not get last sync time for %s: %v\n", repo, err)
-		}
-
-		syncSince := since
-		if syncSince == nil && lastSync != nil {
-			syncSince = lastSync
-		}
-
-		for _, team := range teamsToSync {
-			fmt.Printf("  Team: %s\n", team.Name)
-
-			usernames := c.extractGitHubUsernames(team.Members)
-			if len(usernames) == 0 {
-				fmt.Printf("    No GitHub usernames configured for this team\n")
-				continue
-			}
-
-			prs, err := ghClient.FetchPRsForTeamMembers(ctx, repo, usernames, syncSince)
-			if err != nil {
-				fmt.Printf("    Error fetching PRs: %v\n", err)
-				continue
-			}
-
-			fmt.Printf("    Found %d PRs\n", len(prs))
-
-			for _, pr := range prs {
-				if err := prRepo.Save(pr); err != nil {
-					fmt.Printf("    Warning: Failed to save PR #%d: %v\n", pr.GitHubPRID, err)
-				} else {
-					totalPRs++
+		bus := make(chan string, len(cfg.Integrations.GitHub.Repositories))
+		defer close(bus)
+		for _, repo := range cfg.Integrations.GitHub.Repositories {
+			wp.Work(func() {
+				if err := ghClient.ValidateAccess(ctx, repo); err != nil {
+					bus <- fmt.Sprintf("Warning: Cannot access repository %s: %v\n", repo, err)
+					return
 				}
-			}
-		}
 
-		if err := prRepo.UpdateLastSync(repo); err != nil {
-			fmt.Printf("Warning: Failed to update last sync time for %s: %v\n", repo, err)
+				lastSync, err := prRepo.GetLastSync(repo)
+				if err != nil {
+					bus <- fmt.Sprintf("Warning: Could not get last sync time for %s: %v\n", repo, err)
+				}
+
+				syncSince := since
+				if syncSince == nil && lastSync != nil {
+					syncSince = lastSync
+				}
+
+				prs, err := ghClient.FetchPRsForTeamMembers(ctx, repo, usernames, syncSince)
+				if err != nil {
+					bus <- fmt.Sprintf("Error fetching PRs: %v\n", err)
+					return
+				}
+
+				bus <- fmt.Sprintf("Repo: %s\nFound %d PRs\n", repo, len(prs))
+
+				for _, pr := range prs {
+					if err := prRepo.Save(pr); err != nil {
+						bus <- fmt.Sprintf("Warning: Failed to save PR #%d: %v\n", pr.GitHubPRID, err)
+					} else {
+						totalPRs++
+					}
+				}
+
+				if err := prRepo.UpdateLastSync(repo); err != nil {
+					bus <- fmt.Sprintf("Warning: Failed to update last sync time for %s: %v\n", repo, err)
+				}
+			})
+			msg := <-bus
+			fmt.Println(msg)
 		}
 	}
 
