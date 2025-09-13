@@ -188,52 +188,50 @@ func (c *SyncCommand) runSync(cfg *config.Config, githubToken, jiraAPIToken, jir
 		}
 	}
 
-	for _, project := range cfg.Integrations.Jira.Projects {
-		fmt.Printf("\n=== Syncing Jira project: %s ===\n", project)
+	for _, team := range teamsToSync {
+		fmt.Printf("  Team: %s\n", team.Name)
 
-		if err := jiraClient.ValidateAccess(ctx, project); err != nil {
-			fmt.Printf("Warning: Cannot access project %s: %v\n", project, err)
-			continue
-		}
+		bus := make(chan string, len(cfg.Integrations.Jira.Projects))
+		defer close(bus)
+		for _, project := range cfg.Integrations.Jira.Projects {
 
-		lastSync, err := issueRepo.GetLastSync(project)
-		if err != nil {
-			fmt.Printf("Warning: Could not get last sync time for %s: %v\n", project, err)
-		}
-
-		syncSince := since
-		if syncSince == nil && lastSync != nil {
-			syncSince = lastSync
-		}
-
-		for _, team := range teamsToSync {
-			fmt.Printf("  Team: %s\n", team.Name)
-
-			usernames := c.extractJiraUsernames(team.Members)
-			if len(usernames) == 0 {
-				fmt.Printf("    No Jira usernames configured for this team\n")
-				continue
-			}
-
-			issues, err := jiraClient.FetchIssuesForTeamMembers(ctx, project, usernames, syncSince)
-			if err != nil {
-				fmt.Printf("    Error fetching issues: %v\n", err)
-				continue
-			}
-
-			fmt.Printf("    Found %d issues\n", len(issues))
-
-			for _, issue := range issues {
-				if err := issueRepo.Save(issue); err != nil {
-					fmt.Printf("    Warning: Failed to save issue %s: %v\n", issue.JiraIssueID, err)
-				} else {
-					totalIssues++
+			wp.Work(func() {
+				if err := jiraClient.ValidateAccess(ctx, project); err != nil {
+					bus <- fmt.Sprintf("Warning: Cannot access project %s: %v\n", project, err)
+					return
 				}
-			}
-		}
 
-		if err := issueRepo.UpdateLastSync(project); err != nil {
-			fmt.Printf("Warning: Failed to update last sync time for %s: %v\n", project, err)
+				lastSync, _ := issueRepo.GetLastSync(project)
+				syncSince := since
+				if syncSince == nil && lastSync != nil {
+					syncSince = lastSync
+				}
+
+				usernames := c.extractJiraUsernames(team.Members)
+				if len(usernames) == 0 {
+					bus <- "No Jira usernames configured for this team\n"
+					return
+				}
+
+				issues, err := jiraClient.FetchIssuesForTeamMembers(ctx, project, usernames, syncSince)
+				if err != nil {
+					bus <- fmt.Sprintf("Error fetching issues: %v\n", err)
+					return
+				}
+
+				bus <- fmt.Sprintf("Found %d issues\n", len(issues))
+
+				for _, issue := range issues {
+					if err := issueRepo.Save(issue); err != nil {
+						bus <- fmt.Sprintf("Warning: Failed to save issue %s: %v\n", issue.JiraIssueID, err)
+					} else {
+						totalIssues++
+					}
+				}
+				if err := issueRepo.UpdateLastSync(project); err != nil {
+					bus <- fmt.Sprintf("Warning: Failed to update last sync time for %s: %v\n", project, err)
+				}
+			})
 		}
 	}
 
